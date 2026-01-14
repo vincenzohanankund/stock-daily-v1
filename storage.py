@@ -27,6 +27,8 @@ from sqlalchemy import (
     Integer,
     Index,
     UniqueConstraint,
+    Text,
+    JSON,
     select,
     and_,
     desc,
@@ -119,6 +121,58 @@ class StockDaily(Base):
         }
 
 
+class StockAnalysis(Base):
+    """
+    股票分析结果模型
+    
+    存储 AI 分析生成的结构化数据
+    """
+    __tablename__ = 'stock_analysis'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(10), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
+    
+    # 分析结果摘要
+    sentiment_score = Column(Integer)
+    trend_prediction = Column(String(50))
+    operation_advice = Column(String(50))
+    
+    # 完整分析数据 (JSON)
+    raw_json = Column(JSON)  # 存储完整的 AnalysisResult.to_dict()
+    
+    created_at = Column(DateTime, default=datetime.now)
+    
+    # 唯一约束
+    __table_args__ = (
+        UniqueConstraint('code', 'date', name='uix_analysis_code_date'),
+    )
+
+
+class MarketReview(Base):
+    """
+    大盘复盘数据模型
+    
+    存储每日大盘复盘报告和概览数据
+    """
+    __tablename__ = 'market_review'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    
+    # 复盘报告内容
+    report_content = Column(Text)  # Markdown 格式报告
+    
+    # 市场概览数据 (JSON)
+    overview_json = Column(JSON)  # 存储 MarketOverview.to_dict()
+    
+    # 市场新闻数据 (JSON) - 新增
+    news_json = Column(JSON)  # 存储新闻列表 List[Dict]
+    
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class DatabaseManager:
     """
     数据库管理器 - 单例模式
@@ -206,7 +260,7 @@ class DatabaseManager:
         """
         检查是否已有指定日期的数据
         
-        用于断点续传逻辑：如果已有数据则跳过网络请求
+        用于断点续传逻辑：如果已有数据且更新时间足够新，则跳过网络请求
         
         Args:
             code: 股票代码
@@ -228,7 +282,33 @@ class DatabaseManager:
                 )
             ).scalar_one_or_none()
             
-            return result is not None
+            # 如果没有数据，返回 False
+            if result is None:
+                logger.info(f"[{code}] 检查日期 {target_date}: 数据库中无数据")
+                return False
+                
+            now = datetime.now()
+            
+            # 检查数据完整性
+            updated_at = result.updated_at or result.created_at
+            
+            # 该数据的收盘时间 (数据日期的 15:00)
+            data_closing_time = datetime.combine(result.date, datetime.min.time()).replace(hour=15, minute=0)
+            
+            logger.info(f"[{code}] 数据检查: 目标日期={target_date}, 记录更新时间={updated_at}, 当前时间={now}, 收盘界限={data_closing_time}")
+
+            # 如果当前时间已经超过了该数据的收盘时间 (说明这应该是一条完整的日线)
+            if now > data_closing_time:
+                # 如果数据的更新时间早于收盘时间 -> 说明是盘中数据，已过期，需更新为收盘数据
+                if updated_at < data_closing_time:
+                    logger.info(f"[{code}] 数据过期 ({result.date} 收盘前获取: {updated_at.strftime('%H:%M')})，需更新收盘数据")
+                    return False
+                else:
+                    logger.info(f"[{code}] 数据有效 (已是收盘后更新)")
+            else:
+                 logger.info(f"[{code}] 数据有效 (当前未到收盘时间)")
+
+            return True
     
     def get_latest_data(
         self, 
@@ -463,6 +543,144 @@ class DatabaseManager:
             return "短期走弱 🔽"
         else:
             return "震荡整理 ↔️"
+
+    def save_analysis_result(self, result_dict: Dict[str, Any]) -> bool:
+        """保存 AI 分析结果"""
+        code = result_dict.get('code')
+        if not code:
+            return False
+            
+        today = date.today()
+        
+        with self.get_session() as session:
+            try:
+                # 检查是否存在
+                existing = session.execute(
+                    select(StockAnalysis).where(
+                        and_(
+                            StockAnalysis.code == code,
+                            StockAnalysis.date == today
+                        )
+                    )
+                ).scalar_one_or_none()
+                
+                if existing:
+                    existing.sentiment_score = result_dict.get('sentiment_score')
+                    existing.trend_prediction = result_dict.get('trend_prediction')
+                    existing.operation_advice = result_dict.get('operation_advice')
+                    existing.raw_json = result_dict
+                    existing.created_at = datetime.now()
+                else:
+                    record = StockAnalysis(
+                        code=code,
+                        date=today,
+                        sentiment_score=result_dict.get('sentiment_score'),
+                        trend_prediction=result_dict.get('trend_prediction'),
+                        operation_advice=result_dict.get('operation_advice'),
+                        raw_json=result_dict
+                    )
+                    session.add(record)
+                
+                session.commit()
+                return True
+            except Exception as e:
+                session.rollback()
+                logger.error(f"保存分析结果失败: {e}")
+                return False
+
+    def get_latest_analysis(self, code: str) -> Optional[Dict[str, Any]]:
+        """获取最新的分析结果"""
+        with self.get_session() as session:
+            result = session.execute(
+                select(StockAnalysis)
+                .where(StockAnalysis.code == code)
+                .order_by(desc(StockAnalysis.created_at))  # 按创建时间倒序
+                .limit(1)
+            ).scalar_one_or_none()
+            
+            if result and result.raw_json:
+                data = result.raw_json.copy()
+                # 注入数据库记录的创建时间，用于前端判断更新
+                if result.created_at:
+                    data['created_at'] = result.created_at.isoformat()
+                return data
+            return None
+
+    def save_market_review(self, date_str: str, report: str, overview: Dict[str, Any], news: Optional[List[Dict[str, Any]]] = None) -> bool:
+        """
+        保存大盘复盘
+        
+        Args:
+            date_str: 日期
+            report: 复盘报告内容
+            overview: 市场概览数据
+            news: 市场新闻列表 (新增)
+        """
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = date.today()
+            
+        with self.get_session() as session:
+            try:
+                # 检查是否存在
+                existing = session.execute(
+                    select(MarketReview).where(MarketReview.date == target_date)
+                ).scalar_one_or_none()
+                
+                if existing:
+                    existing.report_content = report
+                    existing.overview_json = overview
+                    if news is not None:
+                        existing.news_json = news
+                    existing.updated_at = datetime.now()
+                else:
+                    record = MarketReview(
+                        date=target_date,
+                        report_content=report,
+                        overview_json=overview,
+                        news_json=news
+                    )
+                    session.add(record)
+                
+                session.commit()
+                return True
+            except Exception as e:
+                session.rollback()
+                logger.error(f"保存大盘复盘失败: {e}")
+                return False
+
+    def get_market_review(self, date_str: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        获取大盘复盘数据
+        
+        Args:
+            date_str: 日期字符串 (YYYY-MM-DD)，如果不传则获取最新的一条
+        """
+        with self.get_session() as session:
+            query = select(MarketReview)
+            
+            if date_str:
+                try:
+                    target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    query = query.where(MarketReview.date == target_date)
+                except ValueError:
+                    return None
+            else:
+                query = query.order_by(desc(MarketReview.date)).limit(1)
+                
+            result = session.execute(query).scalar_one_or_none()
+            
+            if result:
+                return {
+                    'date': result.date.isoformat(),
+                    'report_content': result.report_content,
+                    'overview': result.overview_json,
+                    'news': result.news_json,  # 返回新闻数据
+                    'created_at': result.created_at.isoformat() if result.created_at else None,
+                    'updated_at': result.updated_at.isoformat() if result.updated_at else None,
+                }
+            return None
 
 
 # 便捷函数

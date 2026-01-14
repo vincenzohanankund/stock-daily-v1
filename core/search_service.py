@@ -13,6 +13,7 @@ A股自选股智能分析系统 - 搜索服务模块
 
 import logging
 import random
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -32,6 +33,39 @@ class SearchResult:
     source: str  # 来源网站
     published_date: Optional[str] = None
     
+    def __post_init__(self):
+        """初始化后自动清洗文本"""
+        self.title = self._clean_text(self.title)
+        self.snippet = self._clean_text(self.snippet)
+    
+    @staticmethod
+    def _clean_text(text: str) -> str:
+        """清洗文本，移除乱码和多余空白"""
+        if not text:
+            return ""
+            
+        # 1. 移除替换字符  (U+FFFD)
+        text = text.replace('\ufffd', '')
+        
+        # 2. 尝试修复常见编码错误（如 Latin-1 误解码）
+        try:
+            # 有时 UTF-8 字节被错误地解码为 Latin-1/Windows-1252
+            # 尝试编码回 Latin-1 再解码为 UTF-8
+            # 典型的乱码特征：Ã©, Ã, Â 等
+            if 'Ã' in text or 'Â' in text:
+                text = text.encode('latin1').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+            
+        # 3. 移除不可见字符 (保留常见标点和中文)
+        # 过滤掉控制字符，但保留换行符
+        text = "".join(ch for ch in text if ch == '\n' or ch >= ' ')
+        
+        # 4. 移除多余空白
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+
     def to_text(self) -> str:
         """转换为文本格式"""
         date_str = f" ({self.published_date})" if self.published_date else ""
@@ -204,6 +238,10 @@ class TavilySearchProvider(BaseSearchProvider):
             client = TavilyClient(api_key=api_key)
             
             # 执行搜索（优化：使用advanced深度、限制最近7天）
+            # 注意：Tavily 官方 SDK 内部可能使用了 tqdm 显示进度条，这里无法直接禁用
+            # 但我们可以通过日志明确当前状态
+            print(f"[Tavily] 正在搜索: {query} ...")
+            
             response = client.search(
                 query=query,
                 search_depth="advanced",  # advanced 获取更多结果

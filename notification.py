@@ -17,7 +17,7 @@ from typing import List, Dict, Any, Optional
 import requests
 
 from config import get_config
-from analyzer import AnalysisResult
+from core.analyzer import AnalysisResult
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +32,36 @@ class NotificationService:
     3. 支持本地保存日报
     """
     
-    def __init__(self, webhook_url: Optional[str] = None):
+    def __init__(
+        self,
+        wechat_webhook_url: Optional[str] = None,
+        mattermost_webhook_url: Optional[str] = None
+    ):
         """
         初始化通知服务
         
         Args:
-            webhook_url: 企业微信 Webhook URL（可选，默认从配置读取）
+            wechat_webhook_url: 企业微信 Webhook URL（可选，默认从配置读取）
+            mattermost_webhook_url: Mattermost Webhook URL（可选，默认从配置读取）
         """
-        self._webhook_url = webhook_url or get_config().wechat_webhook_url
+        config = get_config()
         
-        if not self._webhook_url:
-            logger.warning("企业微信 Webhook URL 未配置，将不发送推送通知")
+        # 企业微信配置
+        self._wechat_url = wechat_webhook_url or config.wechat_webhook_url
+        self._wechat_enabled = config.wechat_enabled
+        
+        # Mattermost 配置
+        self._mattermost_url = mattermost_webhook_url or config.mattermost_webhook_url
+        self._mattermost_enabled = config.mattermost_enabled
+        
+        if not self._wechat_url and not self._mattermost_url:
+            logger.warning("未配置任何推送 Webhook URL，将不发送推送通知")
     
     def is_available(self) -> bool:
-        """检查通知服务是否可用"""
-        return bool(self._webhook_url)
+        """检查通知服务是否可用（任一渠道可用即可）"""
+        wechat_ok = bool(self._wechat_url) and self._wechat_enabled
+        mm_ok = bool(self._mattermost_url) and self._mattermost_enabled
+        return wechat_ok or mm_ok
     
     def generate_daily_report(
         self, 
@@ -744,64 +759,103 @@ class NotificationService:
     def send_to_wechat(self, content: str) -> bool:
         """
         推送消息到企业微信机器人
-        
-        企业微信 Webhook 消息格式：
-        {
-            "msgtype": "markdown",
-            "markdown": {
-                "content": "Markdown 内容"
-            }
-        }
-        
-        注意：企业微信 Markdown 限制 4096 字符
-        
-        Args:
-            content: Markdown 格式的消息内容
-            
-        Returns:
-            是否发送成功
         """
-        if not self.is_available():
-            logger.warning("企业微信 Webhook 未配置，跳过推送")
+        if not self._wechat_url or not self._wechat_enabled:
+            if not self._wechat_enabled and self._wechat_url:
+                logger.info("企业微信推送已禁用")
             return False
         
         # 检查长度
         if len(content) > 4000:
-            logger.warning(f"消息内容超长({len(content)}字符)，将截断至4000字符")
-            content = content[:3950] + "\n\n...(内容过长已截断，详见完整报告)"
+            logger.warning(f"企业微信消息超长({len(content)}字符)，截断至4000字符")
+            content = content[:3950] + "\n\n...(内容过长已截断)"
         
         try:
-            return self._send_single_message(content)
+            payload = {
+                "msgtype": "markdown",
+                "markdown": {
+                    "content": content
+                }
+            }
+            
+            response = requests.post(
+                self._wechat_url,
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('errcode') == 0:
+                    logger.info("企业微信消息发送成功")
+                    return True
+                else:
+                    logger.error(f"企业微信返回错误: {result}")
+                    return False
+            else:
+                logger.error(f"企业微信请求失败: {response.status_code}")
+                return False
+                
         except Exception as e:
             logger.error(f"发送企业微信消息失败: {e}")
             return False
-    
-    def _send_single_message(self, content: str) -> bool:
-        """发送单条消息"""
-        payload = {
-            "msgtype": "markdown",
-            "markdown": {
-                "content": content
-            }
+
+    def send_to_mattermost(self, content: str) -> bool:
+        """
+        推送消息到 Mattermost
+        
+        Mattermost Webhook 消息格式：
+        {
+            "text": "Markdown 内容"
         }
-        
-        response = requests.post(
-            self._webhook_url,
-            json=payload,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('errcode') == 0:
-                logger.info("企业微信消息发送成功")
+        """
+        if not self._mattermost_url or not self._mattermost_enabled:
+            if not self._mattermost_enabled and self._mattermost_url:
+                logger.info("Mattermost 推送已禁用")
+            return False
+            
+        try:
+            # Mattermost 支持更长的消息，但为了安全起见，我们也可以限制
+            # 但通常 16383 字符是默认限制，比微信大得多
+            if len(content) > 16000:
+                content = content[:15900] + "\n\n...(内容过长已截断)"
+                
+            payload = {
+                "text": content
+            }
+            
+            response = requests.post(
+                self._mattermost_url,
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                logger.info("Mattermost 消息发送成功")
                 return True
             else:
-                logger.error(f"企业微信返回错误: {result}")
+                logger.error(f"Mattermost 请求失败: {response.status_code}, {response.text}")
                 return False
-        else:
-            logger.error(f"企业微信请求失败: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"发送 Mattermost 消息失败: {e}")
             return False
+
+    def send_all(self, content: str) -> Dict[str, bool]:
+        """
+        发送到所有启用的渠道
+        """
+        results = {}
+        
+        # 尝试发送到企业微信
+        if self._wechat_url and self._wechat_enabled:
+            results['wechat'] = self.send_to_wechat(content)
+            
+        # 尝试发送到 Mattermost
+        if self._mattermost_url and self._mattermost_enabled:
+            results['mattermost'] = self.send_to_mattermost(content)
+            
+        return results
     
     def _send_chunked_messages(self, content: str, max_length: int) -> bool:
         """
@@ -826,7 +880,8 @@ class NotificationService:
                 if current_chunk:
                     chunk_content = "\n---\n".join(current_chunk)
                     logger.info(f"发送消息块 {chunk_index}...")
-                    if not self._send_single_message(chunk_content):
+                    # 这里默认只实现了微信的分块逻辑，Mattermost 通常不需要
+                    if not self.send_to_wechat(chunk_content):
                         all_success = False
                     chunk_index += 1
                 
@@ -841,7 +896,7 @@ class NotificationService:
         if current_chunk:
             chunk_content = "\n---\n".join(current_chunk)
             logger.info(f"发送消息块 {chunk_index}（最后）...")
-            if not self._send_single_message(chunk_content):
+            if not self.send_to_wechat(chunk_content):
                 all_success = False
         
         return all_success
@@ -947,8 +1002,9 @@ def send_daily_report(results: List[AnalysisResult]) -> bool:
     # 保存到本地
     service.save_report_to_file(report)
     
-    # 推送到企业微信
-    return service.send_to_wechat(report)
+    # 推送到所有启用渠道
+    results = service.send_all(report)
+    return any(results.values())
 
 
 if __name__ == "__main__":
@@ -1001,10 +1057,10 @@ if __name__ == "__main__":
     filepath = service.save_report_to_file(report)
     print(f"保存成功: {filepath}")
     
-    # 推送测试（仅当配置了 Webhook 时）
+    # 推送测试
     if service.is_available():
         print("\n=== 推送测试 ===")
-        success = service.send_to_wechat(report)
-        print(f"推送结果: {'成功' if success else '失败'}")
+        results = service.send_all(report)
+        print(f"推送结果: {results}")
     else:
-        print("\n企业微信 Webhook 未配置，跳过推送测试")
+        print("\n未配置推送 Webhook，跳过推送测试")

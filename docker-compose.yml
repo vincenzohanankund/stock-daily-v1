@@ -13,6 +13,10 @@ services:
     container_name: stock-analyzer
     restart: unless-stopped
     
+    # 端口映射（Web 界面）
+    ports:
+      - "8000:8000"
+    
     # 环境变量（从 .env 文件加载）
     env_file:
       - .env
@@ -23,14 +27,10 @@ services:
       - ./logs:/app/logs          # 日志文件
       - ./reports:/app/reports    # 分析报告
     
-    # 网络设置（如果需要代理，取消注释下面的配置）
-    # network_mode: "host"
-    # 或使用环境变量设置代理
+    # 网络设置
     environment:
       - TZ=Asia/Shanghai
-      # 代理设置（如果需要）
-      # - http_proxy=http://host.docker.internal:10809
-      # - https_proxy=http://host.docker.internal:10809
+      # 代理设置建议移至 .env 文件，此处仅保留时区
     
     # 日志配置
     logging:
@@ -43,7 +43,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
         reservations:
           memory: 256M
 

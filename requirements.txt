@@ -8,6 +8,11 @@ tenacity>=8.2.0             # 重试机制（指数退避）
 sqlalchemy>=2.0.0           # ORM数据库操作
 schedule>=1.2.0             # 定时任务调度
 
+# Web 界面
+fastapi>=0.100.0            # Web 框架
+uvicorn>=0.20.0             # ASGI 服务器
+jinja2>=3.1.0               # 模板引擎
+
 # 数据源依赖（多源策略）
 akshare>=1.12.0             # Primary: 东方财富爬虫数据源
 tushare>=1.4.0              # Backup 1: 挖地兔 Pro API

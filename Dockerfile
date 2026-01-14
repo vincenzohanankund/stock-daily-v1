@@ -15,17 +15,17 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件
 COPY requirements.txt .
 
 # 安装 Python 依赖
-RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
-# 复制应用代码
-COPY *.py ./
-COPY data_provider/ ./data_provider/
+# 复制应用代码（包含所有必要目录）
+COPY . .
 
 # 创建数据目录
 RUN mkdir -p /app/data /app/logs /app/reports
@@ -38,9 +38,12 @@ ENV DATABASE_PATH=/app/data/stock_analysis.db
 # 数据卷（持久化数据）
 VOLUME ["/app/data", "/app/logs", "/app/reports"]
 
-# 健康检查
-HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+# 暴露 Web 端口
+EXPOSE 8000
+
+# 健康检查（优先检查 Web 服务）
+HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || python -c "import sys; sys.exit(0)"
 
 # 默认命令（可被覆盖）
 CMD ["python", "main.py", "--schedule"]

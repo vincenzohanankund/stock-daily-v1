@@ -19,7 +19,7 @@ import akshare as ak
 import pandas as pd
 
 from config import get_config
-from search_service import SearchService
+from core.search_service import SearchService
 
 logger = logging.getLogger(__name__)
 
@@ -250,21 +250,30 @@ class MarketAnalyzer:
         try:
             logger.info("[大盘] 获取北向资金...")
             
-            # 获取北向资金数据
-            df = ak.stock_hsgt_north_net_flow_in_em(symbol="北上")
+            # 使用新的 API 获取北向资金数据
+            df = ak.stock_hsgt_fund_flow_summary_em()
             
             if df is not None and not df.empty:
-                # 取最新一条数据
-                latest = df.iloc[-1]
-                if '当日净流入' in df.columns:
-                    overview.north_flow = float(latest['当日净流入']) / 1e8  # 转为亿元
-                elif '净流入' in df.columns:
-                    overview.north_flow = float(latest['净流入']) / 1e8
+                # 筛选出北向资金（资金方向为"北向"）
+                if '资金方向' in df.columns:
+                    north_df = df[df['资金方向'] == '北向']
                     
-                logger.info(f"[大盘] 北向资金净流入: {overview.north_flow:.2f}亿")
+                    if not north_df.empty:
+                        # 对所有北向资金的成交净买额求和（沪股通+深股通）
+                        if '成交净买额' in north_df.columns:
+                            total_flow = north_df['成交净买额'].sum()
+                            overview.north_flow = float(total_flow) / 1e8  # 转为亿元
+                            logger.info(f"[大盘] 北向资金净流入: {overview.north_flow:.2f}亿")
+                        else:
+                            logger.warning("[大盘] 未找到'成交净买额'列")
+                    else:
+                        logger.warning("[大盘] 未找到北向资金数据")
+                else:
+                    logger.warning("[大盘] 数据格式不包含'资金方向'列")
                 
         except Exception as e:
             logger.warning(f"[大盘] 获取北向资金失败: {e}")
+            # 北向资金获取失败不影响整体流程，继续执行
     
     def search_market_news(self) -> List[Dict]:
         """
@@ -501,12 +510,12 @@ class MarketAnalyzer:
 """
         return report
     
-    def run_daily_review(self) -> str:
+    def run_daily_review(self) -> Dict[str, Any]:
         """
         执行每日大盘复盘流程
         
         Returns:
-            复盘报告文本
+            包含报告和新闻的字典
         """
         logger.info("========== 开始大盘复盘分析 ==========")
         
@@ -521,7 +530,10 @@ class MarketAnalyzer:
         
         logger.info("========== 大盘复盘分析完成 ==========")
         
-        return report
+        return {
+            'report': report,
+            'news': news
+        }
 
 
 # 测试入口

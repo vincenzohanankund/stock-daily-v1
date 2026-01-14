@@ -26,8 +26,8 @@ import os
 # 代理配置 - 仅在本地环境使用，GitHub Actions 不需要
 if os.getenv("GITHUB_ACTIONS") != "true":
     # 本地开发环境，如需代理请取消注释或修改端口
-    os.environ["http_proxy"] = "http://127.0.0.1:10809"
-    os.environ["https_proxy"] = "http://127.0.0.1:10809"
+    # os.environ["http_proxy"] = "http://127.0.0.1:10809"
+    # os.environ["https_proxy"] = "http://127.0.0.1:10809"
     pass
 
 import argparse
@@ -35,7 +35,7 @@ import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -44,11 +44,11 @@ from config import get_config, Config
 from storage import get_db, DatabaseManager
 from data_provider import DataFetcherManager
 from data_provider.akshare_fetcher import AkshareFetcher, RealtimeQuote, ChipDistribution
-from analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP
+from core.analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP
 from notification import NotificationService, send_daily_report
-from search_service import SearchService, SearchResponse
-from stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
-from market_analyzer import MarketAnalyzer
+from core.search_service import SearchService, SearchResponse
+from core.stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
+from core.market_analyzer import MarketAnalyzer
 
 # 配置日志格式
 LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s'
@@ -167,7 +167,7 @@ class StockAnalysisPipeline:
             logger.warning("搜索服务未启用（未配置 API Key）")
     
     def fetch_and_save_stock_data(
-        self, 
+        self,
         code: str,
         force_refresh: bool = False
     ) -> Tuple[bool, Optional[str]]:
@@ -187,15 +187,29 @@ class StockAnalysisPipeline:
             Tuple[是否成功, 错误信息]
         """
         try:
-            today = date.today()
+            # 计算目标检查日期（处理周末和盘前情况）
+            target_date = self._get_target_check_date()
             
-            # 断点续传检查：如果今日数据已存在，跳过
-            if not force_refresh and self.db.has_today_data(code, today):
-                logger.info(f"[{code}] 今日数据已存在，跳过获取（断点续传）")
+            logger.info(f"[{code}] 检查数据状态: 目标日期={target_date}, 强制刷新={force_refresh}")
+            
+            # 断点续传检查：如果目标日期数据已存在且有效，跳过
+            has_data = self.db.has_today_data(code, target_date)
+            logger.info(f"[{code}] 数据库检查结果: {has_data}")
+            
+            # 强制打印到控制台，确保用户能看到
+            print(f"[{code}] 检查日期: {target_date}, 数据库已有数据: {has_data}, 强制刷新: {force_refresh}")
+            
+            if not force_refresh and has_data:
+                logger.info(f"[{code}] 数据已存在且有效({target_date})，跳过获取")
+                print(f"[{code}] 数据已存在且有效，跳过获取")
                 return True, None
             
             # 从数据源获取数据
-            logger.info(f"[{code}] 开始从数据源获取数据...")
+            print(f"[{code}] 触发数据抓取: 强制刷新={force_refresh}, 数据库已有数据={has_data}")
+            logger.info(f"[{code}] 开始从数据源获取数据 (因为: 强制刷新={force_refresh} 或 数据不存在/过期={not has_data})...")
+            # 优化：仅获取最近30天数据，如果需要更多历史数据，可以调整 days 参数
+            # 实际上，如果数据库中已有历史数据，我们只需要获取最近缺失的即可
+            # 但为了简单起见，我们获取最近30天，save_daily_data 会自动处理重复数据
             df, source_name = self.fetcher_manager.get_daily_data(code, days=30)
             
             if df is None or df.empty:
@@ -212,6 +226,36 @@ class StockAnalysisPipeline:
             logger.error(f"[{code}] {error_msg}")
             return False, error_msg
     
+    def _get_target_check_date(self) -> date:
+        """
+        计算应该检查的目标日期
+        
+        逻辑：
+        1. 周末(周六/周日) -> 检查本周五
+        2. 工作日 9:00 前 -> 检查前一交易日
+        3. 其他时间 -> 检查今天
+        """
+        now = datetime.now()
+        target_date = now.date()
+        
+        # 如果是周六(5)或周日(6)，目标日期调整为本周五
+        if target_date.weekday() == 5:
+            target_date -= timedelta(days=1)
+        elif target_date.weekday() == 6:
+            target_date -= timedelta(days=2)
+        
+        # 如果是工作日但未开盘(9:00前)，目标日期调整为前一交易日
+        elif now.hour < 9:
+            target_date -= timedelta(days=1)
+            # 如果回退到了周日(6)，再退2天到周五
+            if target_date.weekday() == 6:
+                target_date -= timedelta(days=2)
+            # 如果回退到了周六(5)，理论上不会发生(因为那是周日退回来的)，但为了保险
+            elif target_date.weekday() == 5:
+                target_date -= timedelta(days=1)
+                
+        return target_date
+
     def analyze_stock(self, code: str) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
@@ -235,6 +279,8 @@ class StockAnalysisPipeline:
             stock_name = STOCK_NAME_MAP.get(code, '')
             
             # Step 1: 获取实时行情（量比、换手率等）
+            # 优化：如果是非交易时间（如周末），且数据库已有最新数据，可以尝试复用或跳过实时行情获取
+            # 但为了保证数据的实时性（如停牌复牌、盘前竞价等），我们还是尝试获取，但增加容错
             realtime_quote: Optional[RealtimeQuote] = None
             try:
                 realtime_quote = self.akshare_fetcher.get_realtime_quote(code)
@@ -252,6 +298,7 @@ class StockAnalysisPipeline:
                 stock_name = f'股票{code}'
             
             # Step 2: 获取筹码分布
+            # 优化：筹码分布数据更新频率较低，如果是周末，可以考虑跳过或使用缓存
             chip_data: Optional[ChipDistribution] = None
             try:
                 chip_data = self.akshare_fetcher.get_chip_distribution(code)
@@ -279,6 +326,8 @@ class StockAnalysisPipeline:
             
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
             news_context = None
+            raw_news_list = []
+            
             if self.search_service.is_available:
                 logger.info(f"[{code}] 开始多维度情报搜索...")
                 
@@ -292,9 +341,20 @@ class StockAnalysisPipeline:
                 # 格式化情报报告
                 if intel_results:
                     news_context = self.search_service.format_intel_report(intel_results, stock_name)
-                    total_results = sum(
-                        len(r.results) for r in intel_results.values() if r.success
-                    )
+                    
+                    # 提取原始新闻数据
+                    for category, search_resp in intel_results.items():
+                        if search_resp.success and search_resp.results:
+                            for item in search_resp.results:
+                                raw_news_list.append({
+                                    'title': item.title,
+                                    'url': item.url,
+                                    'published_date': item.published_date,
+                                    'content': item.snippet,
+                                    'category': category
+                                })
+                    
+                    total_results = len(raw_news_list)
                     logger.info(f"[{code}] 情报搜索完成: 共 {total_results} 条结果")
                     logger.debug(f"[{code}] 情报搜索结果:\n{news_context}")
             else:
@@ -309,15 +369,19 @@ class StockAnalysisPipeline:
             
             # Step 6: 增强上下文数据（添加实时行情、筹码、趋势分析结果、股票名称）
             enhanced_context = self._enhance_context(
-                context, 
-                realtime_quote, 
-                chip_data, 
+                context,
+                realtime_quote,
+                chip_data,
                 trend_result,
                 stock_name  # 传入股票名称
             )
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
-            result = self.analyzer.analyze(enhanced_context, news_context=news_context)
+            result = self.analyzer.analyze(
+                enhanced_context,
+                news_context=news_context,
+                raw_news=raw_news_list
+            )
             
             return result
             
@@ -803,8 +867,8 @@ def main() -> int:
                     serpapi_keys=config.serpapi_keys
                 )
             
-            if config.gemini_api_key:
-                analyzer = GeminiAnalyzer(api_key=config.gemini_api_key)
+            if config.openai_api_key:
+                analyzer = GeminiAnalyzer()
             
             run_market_review(notifier, analyzer, search_service)
             return 0

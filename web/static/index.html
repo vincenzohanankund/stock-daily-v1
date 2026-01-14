@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股智能分析系统</title>
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        [v-cloak] { display: none; }
+        .toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
+        .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(20px); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
+        <!-- 全局 Toast 提示 -->
+        <transition-group name="toast" tag="div" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+            <div v-for="toast in toasts" :key="toast.id"
+                 :class="['px-4 py-3 rounded shadow-lg flex items-center min-w-[300px]',
+                          toast.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+                          toast.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-blue-50 text-blue-800 border border-blue-200']">
+                <i :class="['text-xl mr-2',
+                           toast.type === 'success' ? 'ph-fill ph-check-circle' :
+                           toast.type === 'error' ? 'ph-fill ph-x-circle' : 'ph-fill ph-info']"></i>
+                <span class="text-sm font-medium">{{ toast.message }}</span>
+            </div>
+        </transition-group>
+        <!-- 顶部导航 -->
+        <header class="bg-white shadow-sm sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex">
+                        <div class="flex-shrink-0 flex items-center">
+                            <i class="ph-duotone ph-trend-up text-blue-600 text-2xl mr-2"></i>
+                            <span class="font-bold text-xl text-gray-900">A股智能分析</span>
+                        </div>
+                        <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                            <a href="#" @click.prevent="currentTab = 'dashboard'"
+                               :class="[currentTab === 'dashboard' ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium']">
+                                股票看板
+                            </a>
+                            <a href="#" @click.prevent="currentTab = 'market'"
+                               :class="[currentTab === 'market' ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium']">
+                                大盘复盘
+                            </a>
+                            <a href="#" @click.prevent="currentTab = 'config'"
+                               :class="[currentTab === 'config' ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium']">
+                                配置管理
+                            </a>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <!-- 顶部按钮已移除，移动到 AI 决策分析区域 -->
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容区 -->
+        <main class="flex-1 py-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                
+                <!-- 股票看板 Tab -->
+                <div v-show="currentTab === 'dashboard'" class="space-y-6">
+                    <!-- 股票列表 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <div v-for="stock in stocks" :key="stock.code" 
+                             @click="selectStock(stock)"
+                             :class="['bg-white overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-md transition-shadow border-l-4', selectedStock?.code === stock.code ? 'border-blue-500 ring-2 ring-blue-200' : (stock.pct_chg > 0 ? 'border-red-500' : (stock.pct_chg < 0 ? 'border-green-500' : 'border-gray-300'))]">
+                            <div class="px-4 py-4">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <div class="text-lg font-bold text-gray-900">{{ stock.name }}</div>
+                                        <div class="text-sm text-gray-500">{{ stock.code }}</div>
+                                    </div>
+                                    <div v-if="stock.price" :class="['text-lg font-bold', stock.pct_chg > 0 ? 'text-red-600' : (stock.pct_chg < 0 ? 'text-green-600' : 'text-gray-600')]">
+                                        {{ stock.price }}
+                                        <div class="text-xs text-right">{{ stock.pct_chg > 0 ? '+' : '' }}{{ stock.pct_chg }}%</div>
+                                    </div>
+                                    <div v-else class="text-sm text-gray-400 italic">
+                                        暂无数据
+                                    </div>
+                                </div>
+                                <div class="mt-2 flex items-center justify-between text-xs">
+                                    <span class="px-2 py-1 rounded bg-gray-100 text-gray-600">{{ stock.ma_status }}</span>
+                                    <span class="text-gray-400">{{ formatTime(stock.updated_at) || '未更新' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- K线图与分析区域 -->
+                    <div v-if="selectedStock" class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                {{ selectedStock.name }} ({{ selectedStock.code }}) 行情分析
+                            </h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    实时数据
+                                </span>
+                                <button @click="fetchData" :disabled="isFetching"
+                                        :class="['inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500', isFetching ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700']">
+                                    <i v-if="isFetching" class="ph-bold ph-spinner animate-spin mr-1"></i>
+                                    <i v-else class="ph-bold ph-download-simple mr-1"></i>
+                                    {{ isFetching ? '抓取中...' : '更新数据' }}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="px-4 py-5 sm:p-6">
+                            <!-- K线图容器 -->
+                            <div id="kline-chart" class="w-full h-96"></div>
+                            
+                            <!-- 分析报告 -->
+                            <div class="mt-8 border-t border-gray-200 pt-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="text-base font-bold text-gray-900">AI 决策分析</h4>
+                                    <button @click="analyzeData" :disabled="isAnalyzing || !selectedStock"
+                                            :class="['inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500', isAnalyzing || !selectedStock ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700']">
+                                        <i v-if="isAnalyzing" class="ph-bold ph-spinner animate-spin mr-1"></i>
+                                        <i v-else class="ph-bold ph-magic-wand mr-1"></i>
+                                        {{ isAnalyzing ? '正在分析...' : '分析当前股票' }}
+                                    </button>
+                                </div>
+
+                                <div v-if="isAnalyzing || !analysis" class="text-center py-8 text-gray-500">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <div class="relative w-12 h-12 mb-4">
+                                            <div class="absolute top-0 left-0 w-full h-full border-4 border-blue-200 rounded-full animate-ping opacity-75"></div>
+                                            <div class="absolute top-0 left-0 w-full h-full border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                                        </div>
+                                        <p class="text-sm font-medium text-gray-600 animate-pulse">
+                                            {{ isAnalyzing ? '正在生成 AI 分析报告...' : '正在加载分析数据...' }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div v-else>
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                    <div class="flex items-center mb-4">
+                                        <div class="flex-shrink-0">
+                                            <i :class="['text-4xl', getSentimentIcon(analysis.operation_advice), getSentimentColor(analysis.sentiment_score)]"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h5 class="text-lg font-bold text-gray-900">{{ analysis.operation_advice }}</h5>
+                                            <p class="text-sm text-gray-500">{{ analysis.trend_prediction }} | 评分: {{ analysis.sentiment_score }}</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-700 text-sm leading-relaxed whitespace-pre-line">{{ analysis.analysis_summary }}</p>
+                                    
+                                    <!-- 仪表盘数据 -->
+                                    <div v-if="analysis.dashboard" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div class="bg-white p-3 rounded shadow-sm">
+                                            <div class="text-xs text-gray-500 mb-1">理想买点</div>
+                                            <div class="font-mono font-bold text-blue-600">{{ analysis.dashboard.battle_plan?.sniper_points?.ideal_buy || 'N/A' }}</div>
+                                        </div>
+                                        <div class="bg-white p-3 rounded shadow-sm">
+                                            <div class="text-xs text-gray-500 mb-1">止损位</div>
+                                            <div class="font-mono font-bold text-green-600">{{ analysis.dashboard.battle_plan?.sniper_points?.stop_loss || 'N/A' }}</div>
+                                        </div>
+                                        <div class="bg-white p-3 rounded shadow-sm">
+                                            <div class="text-xs text-gray-500 mb-1">目标位</div>
+                                            <div class="font-mono font-bold text-red-600">{{ analysis.dashboard.battle_plan?.sniper_points?.take_profit || 'N/A' }}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 检查未通过项 (action_checklist) -->
+                                    <div v-if="analysis.dashboard?.battle_plan?.action_checklist && analysis.dashboard.battle_plan.action_checklist.length > 0" class="mt-4">
+                                        <h5 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                                            <i class="ph-bold ph-list-checks text-blue-600 mr-2"></i> 检查未通过项
+                                        </h5>
+                                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                            <ul class="space-y-2">
+                                                <li v-for="(item, idx) in analysis.dashboard.battle_plan.action_checklist" :key="idx"
+                                                    :class="['text-sm flex items-start',
+                                                             item.includes('✅') ? 'text-green-700' :
+                                                             item.includes('⚠️') ? 'text-yellow-700' :
+                                                             item.includes('❌') ? 'text-red-700' : 'text-gray-700']">
+                                                    <span class="mr-2 flex-shrink-0">{{ item.substring(0, 2) }}</span>
+                                                    <span>{{ item.substring(2).trim() }}</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 情报与消息面 -->
+                                <div v-if="analysis.dashboard?.intelligence || analysis.news_summary || (analysis.raw_news && analysis.raw_news.length > 0)" class="mt-6">
+                                    <h4 class="text-base font-bold text-gray-900 mb-4">情报与消息面</h4>
+                                    <div class="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                                        <!-- 原始新闻列表 (优先展示) -->
+                                        <div v-if="analysis.raw_news && analysis.raw_news.length > 0">
+                                            <h5 class="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                                                <i class="ph-bold ph-newspaper text-blue-500 mr-2"></i> 实时资讯
+                                            </h5>
+                                            <ul class="space-y-2">
+                                                <li v-for="(news, idx) in analysis.raw_news.slice(0, 5)" :key="idx" class="text-sm">
+                                                    <div class="flex justify-between items-start">
+                                                        <a :href="news.url" target="_blank" class="text-blue-600 hover:underline font-medium block truncate pr-2">
+                                                            {{ news.title }}
+                                                        </a>
+                                                        <span class="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                                                            {{ formatTime(news.published_date) || '近期' }}
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ news.content }}</p>
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        <!-- AI 总结的消息 (如果没有原始新闻) -->
+                                        <div v-else-if="analysis.dashboard?.intelligence?.latest_news">
+                                            <h5 class="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                                                <i class="ph-bold ph-robot text-purple-500 mr-2"></i> AI 消息总结
+                                            </h5>
+                                            <p class="text-sm text-gray-600 leading-relaxed">{{ analysis.dashboard.intelligence.latest_news }}</p>
+                                        </div>
+
+                                        <!-- 风险警报 -->
+                                        <div v-if="analysis.dashboard?.intelligence?.risk_alerts && analysis.dashboard.intelligence.risk_alerts.length > 0">
+                                            <h5 class="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                                                <i class="ph-bold ph-warning text-red-500 mr-2"></i> 风险警报
+                                            </h5>
+                                            <ul class="list-disc list-inside text-sm text-red-600 space-y-1">
+                                                <li v-for="(risk, idx) in analysis.dashboard.intelligence.risk_alerts" :key="idx">{{ risk }}</li>
+                                            </ul>
+                                        </div>
+
+                                        <!-- 利好催化 -->
+                                        <div v-if="analysis.dashboard?.intelligence?.positive_catalysts && analysis.dashboard.intelligence.positive_catalysts.length > 0">
+                                            <h5 class="text-sm font-bold text-gray-700 mb-2 flex items-center">
+                                                <i class="ph-bold ph-trend-up text-green-500 mr-2"></i> 利好催化
+                                            </h5>
+                                            <ul class="list-disc list-inside text-sm text-green-600 space-y-1">
+                                                <li v-for="(catalyst, idx) in analysis.dashboard.intelligence.positive_catalysts" :key="idx">{{ catalyst }}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 大盘复盘 Tab -->
+                <div v-show="currentTab === 'market'" class="space-y-6">
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                大盘复盘 ({{ marketReview?.date || '未更新' }})
+                            </h3>
+                            <button @click="analyzeMarket" :disabled="isMarketAnalyzing"
+                                    :class="['inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500', isMarketAnalyzing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700']">
+                                <i v-if="isMarketAnalyzing" class="ph-bold ph-spinner animate-spin mr-1"></i>
+                                <i v-else class="ph-bold ph-magic-wand mr-1"></i>
+                                {{ isMarketAnalyzing ? '正在分析...' : '立即分析' }}
+                            </button>
+                        </div>
+                        
+                        <div v-if="!marketReview || !marketReview.overview" class="p-8 text-center text-gray-500">
+                             暂无大盘数据，请点击右上角按钮进行分析。
+                        </div>
+                        
+                        <div v-else class="p-6 space-y-6">
+                            <!-- 核心指标卡片 -->
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <!-- 涨跌分布 -->
+                                <div class="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                                    <h4 class="text-sm font-medium text-gray-500 mb-2">市场情绪</h4>
+                                    <div class="flex items-end space-x-4 mb-2">
+                                        <div class="text-red-600">
+                                            <span class="text-2xl font-bold">{{ marketReview.overview.up_count }}</span>
+                                            <span class="text-xs ml-1">涨</span>
+                                        </div>
+                                        <div class="text-green-600">
+                                            <span class="text-2xl font-bold">{{ marketReview.overview.down_count }}</span>
+                                            <span class="text-xs ml-1">跌</span>
+                                        </div>
+                                        <div class="text-gray-500">
+                                            <span class="text-xl font-bold">{{ marketReview.overview.flat_count }}</span>
+                                            <span class="text-xs ml-1">平</span>
+                                        </div>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5 flex overflow-hidden">
+                                        <div class="bg-red-500 h-2.5" :style="{ width: (marketReview.overview.up_count / (marketReview.overview.up_count + marketReview.overview.down_count + marketReview.overview.flat_count) * 100) + '%' }"></div>
+                                        <div class="bg-gray-400 h-2.5" :style="{ width: (marketReview.overview.flat_count / (marketReview.overview.up_count + marketReview.overview.down_count + marketReview.overview.flat_count) * 100) + '%' }"></div>
+                                        <div class="bg-green-500 h-2.5" :style="{ width: (marketReview.overview.down_count / (marketReview.overview.up_count + marketReview.overview.down_count + marketReview.overview.flat_count) * 100) + '%' }"></div>
+                                    </div>
+                                    <div class="mt-2 text-xs text-gray-500 flex justify-between">
+                                        <span>涨停: {{ marketReview.overview.limit_up_count }}</span>
+                                        <span>跌停: {{ marketReview.overview.limit_down_count }}</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 资金 -->
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="text-sm font-medium text-gray-500 mb-2">两市成交</h4>
+                                    <div class="text-2xl font-bold text-gray-900">{{ marketReview.overview.total_amount.toFixed(0) }} <span class="text-sm font-normal text-gray-500">亿</span></div>
+                                    <div class="mt-2 text-sm text-gray-500">
+                                        北向: <span :class="marketReview.overview.north_flow > 0 ? 'text-red-600' : 'text-green-600'">{{ marketReview.overview.north_flow > 0 ? '+' : '' }}{{ marketReview.overview.north_flow.toFixed(2) }}亿</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 指数 -->
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="text-sm font-medium text-gray-500 mb-2">主要指数</h4>
+                                    <div class="space-y-1">
+                                        <div v-for="idx in marketReview.overview.indices.slice(0, 3)" :key="idx.code" class="flex justify-between text-sm">
+                                            <span class="text-gray-600">{{ idx.name }}</span>
+                                            <span :class="idx.change_pct > 0 ? 'text-red-600' : (idx.change_pct < 0 ? 'text-green-600' : 'text-gray-600')">
+                                                {{ idx.change_pct > 0 ? '+' : '' }}{{ idx.change_pct.toFixed(2) }}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 板块排行 -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                                        <i class="ph-bold ph-trend-up text-red-500 mr-2"></i> 领涨板块
+                                    </h4>
+                                    <div class="space-y-2">
+                                        <div v-for="sector in marketReview.overview.top_sectors" :key="sector.name" class="flex justify-between items-center bg-red-50 px-3 py-2 rounded">
+                                            <span class="text-sm font-medium text-gray-800">{{ sector.name }}</span>
+                                            <span class="text-sm font-bold text-red-600">+{{ sector.change_pct.toFixed(2) }}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                                        <i class="ph-bold ph-trend-down text-green-500 mr-2"></i> 领跌板块
+                                    </h4>
+                                    <div class="space-y-2">
+                                        <div v-for="sector in marketReview.overview.bottom_sectors" :key="sector.name" class="flex justify-between items-center bg-green-50 px-3 py-2 rounded">
+                                            <span class="text-sm font-medium text-gray-800">{{ sector.name }}</span>
+                                            <span class="text-sm font-bold text-green-600">{{ sector.change_pct.toFixed(2) }}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- AI 复盘报告 -->
+                            <div class="border-t border-gray-200 pt-6">
+                                <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                                    <i class="ph-duotone ph-brain text-purple-600 mr-2"></i> AI 复盘报告
+                                </h4>
+                                <div class="prose max-w-none text-gray-700 bg-gray-50 p-6 rounded-lg whitespace-pre-wrap leading-relaxed text-sm">
+                                    {{ marketReview.report_content }}
+                                </div>
+                            </div>
+                            
+                            <!-- 市场情报 -->
+                            <div v-if="marketReview.news && marketReview.news.length > 0" class="border-t border-gray-200 pt-6">
+                                <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                                    <i class="ph-duotone ph-newspaper text-blue-600 mr-2"></i> 市场情报
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div v-for="(news, idx) in marketReview.news" :key="idx" class="bg-gray-50 p-4 rounded-lg hover:shadow-sm transition-shadow">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <a :href="news.url" target="_blank" class="text-sm font-bold text-blue-600 hover:underline line-clamp-2" :title="news.title">
+                                                {{ news.title }}
+                                            </a>
+                                        </div>
+                                        <p class="text-xs text-gray-600 line-clamp-3 mb-2">{{ news.snippet }}</p>
+                                        <div class="flex justify-between items-center text-xs text-gray-400">
+                                            <span>{{ news.source || '未知来源' }}</span>
+                                            <span>{{ formatTime(news.published_date) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配置管理 Tab (复刻图片风格) -->
+                <div v-show="currentTab === 'config'" class="space-y-8">
+                    <div class="flex justify-between items-center border-b border-gray-200 pb-4">
+                        <h2 class="text-2xl font-bold text-gray-900">全局配置</h2>
+                        <button @click="saveConfig" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 shadow-sm">
+                            <i class="ph-bold ph-floppy-disk mr-1"></i> 保存配置
+                        </button>
+                    </div>
+
+                    <!-- AI 配置 -->
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                            <h3 class="text-lg font-bold text-gray-900">AI 模型配置 (OpenAI 兼容)</h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="bg-blue-50 p-4 rounded-md mb-6 border border-blue-100">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="ph-fill ph-info text-blue-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <h3 class="text-sm font-medium text-blue-800">配置说明</h3>
+                                        <div class="mt-2 text-sm text-blue-700">
+                                            <p>本系统统一使用 OpenAI 兼容接口连接各类大模型（包括 DeepSeek、Claude、Gemini 等）。</p>
+                                            <ul class="list-disc list-inside mt-1">
+                                                <li><strong>Gemini 用户：</strong> Base URL 填写 <code>https://generativelanguage.googleapis.com/v1beta/openai/</code></li>
+                                                <li><strong>DeepSeek 用户：</strong> Base URL 填写 <code>https://api.deepseek.com/v1</code></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="col-span-1 space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key <span class="text-red-500">*</span></label>
+                                        <input type="password" v-model="config.openai_api_key" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="sk-...">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">请求间隔 (秒)</label>
+                                        <input type="number" v-model="config.gemini_request_delay" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" step="0.5">
+                                    </div>
+                                </div>
+                                <div class="col-span-1 space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                                        <input type="text" v-model="config.openai_base_url" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="默认: https://api.openai.com/v1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">模型名称</label>
+                                        <input type="text" v-model="config.openai_model" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="gpt-4o-mini, gemini-2.0-flash...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 搜索与数据源配置 -->
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                            <h3 class="text-lg font-bold text-gray-900">数据服务配置</h3>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- 新闻搜索 -->
+                            <div class="col-span-1 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tavily API Keys <span class="text-gray-400 text-xs">(新闻搜索，支持多Key)</span></label>
+                                    <input type="password" v-model="config.tavily_api_keys" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">SerpAPI Keys <span class="text-gray-400 text-xs">(备用搜索)</span></label>
+                                    <input type="password" v-model="config.serpapi_keys" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2">
+                                </div>
+                            </div>
+                            <!-- 数据源 -->
+                            <div class="col-span-1 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tushare Token <span class="text-gray-400 text-xs">(可选数据源)</span></label>
+                                    <input type="password" v-model="config.tushare_token" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 自动化与通知配置 -->
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                            <h3 class="text-lg font-bold text-gray-900">自动化与通知配置</h3>
+                        </div>
+                        <div class="p-6 space-y-8">
+                            
+                            <!-- 定时任务设置 -->
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center">
+                                        <i class="ph-fill ph-alarm text-orange-500 text-2xl mr-2"></i>
+                                        <div>
+                                            <span class="text-base font-bold text-gray-800">每日定时报告</span>
+                                            <p class="text-xs text-gray-500">自动分析并在指定时间发送日报</p>
+                                        </div>
+                                    </div>
+                                    <button @click="config.schedule_enabled = !config.schedule_enabled"
+                                            :class="[config.schedule_enabled ? 'bg-orange-500' : 'bg-gray-200', 'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500']">
+                                        <span aria-hidden="true" :class="[config.schedule_enabled ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200']"></span>
+                                    </button>
+                                </div>
+                                
+                                <div v-if="config.schedule_enabled" class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-8 border-t border-gray-200 pt-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">执行时间 (每天)</label>
+                                        <input type="time" v-model="config.schedule_time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm border p-2">
+                                    </div>
+                                    <div class="flex items-center justify-between pt-6">
+                                        <span class="text-sm font-medium text-gray-700">包含大盘复盘</span>
+                                        <button @click="config.market_review_enabled = !config.market_review_enabled"
+                                                :class="[config.market_review_enabled ? 'bg-blue-600' : 'bg-gray-200', 'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500']">
+                                            <span aria-hidden="true" :class="[config.market_review_enabled ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200']"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 消息推送渠道 -->
+                            <div class="space-y-6">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200 pb-2">推送渠道</h4>
+                                
+                                <!-- 企业微信 -->
+                                <div class="border-b border-gray-100 pb-6">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="flex items-center">
+                                            <i class="ph-fill ph-wechat-logo text-green-600 text-2xl mr-2"></i>
+                                            <span class="text-base font-bold text-gray-800">企业微信机器人</span>
+                                        </div>
+                                        <button @click="config.wechat_enabled = !config.wechat_enabled"
+                                                :class="[config.wechat_enabled ? 'bg-green-600' : 'bg-gray-200', 'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500']">
+                                            <span aria-hidden="true" :class="[config.wechat_enabled ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200']"></span>
+                                        </button>
+                                    </div>
+                                    <div v-if="config.wechat_enabled" class="pl-8">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                                        <input type="text" v-model="config.wechat_webhook_url" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                                    </div>
+                                </div>
+
+                                <!-- Mattermost -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="flex items-center">
+                                            <i class="ph-fill ph-chats-circle text-blue-600 text-2xl mr-2"></i>
+                                            <span class="text-base font-bold text-gray-800">Mattermost</span>
+                                        </div>
+                                        <button @click="config.mattermost_enabled = !config.mattermost_enabled"
+                                                :class="[config.mattermost_enabled ? 'bg-blue-600' : 'bg-gray-200', 'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500']">
+                                            <span aria-hidden="true" :class="[config.mattermost_enabled ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200']"></span>
+                                        </button>
+                                    </div>
+                                    <div v-if="config.mattermost_enabled" class="pl-8">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                                        <input type="text" v-model="config.mattermost_webhook_url" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="https://your-mattermost-server.com/hooks/...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 自选股与系统配置 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- 自选股配置 -->
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <h3 class="text-lg font-bold text-gray-900">自选股管理</h3>
+                            </div>
+                            <div class="p-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">股票代码列表 (逗号分隔)</label>
+                                    <textarea v-model="config.stock_list" rows="5" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" placeholder="600519, 000001, 300750"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 系统设置 (精简版) -->
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <h3 class="text-lg font-bold text-gray-900">高级设置</h3>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">最大并发数</label>
+                                    <input type="number" v-model.number="config.max_workers" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2">
+                                    <p class="text-xs text-gray-500 mt-1">控制同时分析的股票数量，建议 3-5 以防止被封</p>
+                                </div>
+                                <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                                    <span class="flex-grow flex flex-col">
+                                        <span class="text-sm font-medium text-gray-900">调试模式</span>
+                                        <span class="text-sm text-gray-500">输出详细日志用于排错</span>
+                                    </span>
+                                    <button @click="config.debug = !config.debug"
+                                            :class="[config.debug ? 'bg-blue-600' : 'bg-gray-200', 'relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500']">
+                                        <span aria-hidden="true" :class="[config.debug ? 'translate-x-5' : 'translate-x-0', 'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200']"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, watch } = Vue
+
+        createApp({
+            setup() {
+                const currentTab = ref('dashboard')
+                const stocks = ref([])
+                const selectedStock = ref(null)
+                const config = ref({})
+                const analysis = ref(null)
+                const marketReview = ref(null)
+                const isMarketAnalyzing = ref(false)
+                
+                // 状态管理：使用对象来存储每只股票的状态
+                const fetchingStatus = ref({})   // { "000001": true/false }
+                const analyzingStatus = ref({})  // { "000001": true/false }
+                
+                // 计算属性：当前选中股票的状态
+                const isFetching = Vue.computed(() => {
+                    return selectedStock.value && fetchingStatus.value[selectedStock.value.code]
+                })
+                
+                const isAnalyzing = Vue.computed(() => {
+                    return selectedStock.value && analyzingStatus.value[selectedStock.value.code]
+                })
+                
+                let chartInstance = null
+                
+                // Toast 系统
+                const toasts = ref([])
+                let toastId = 0
+                
+                const showToast = (message, type = 'info') => {
+                    const id = toastId++
+                    toasts.value.push({ id, message, type })
+                    setTimeout(() => {
+                        const index = toasts.value.findIndex(t => t.id === id)
+                        if (index !== -1) toasts.value.splice(index, 1)
+                    }, 3000)
+                }
+
+                // 格式化时间
+                const formatTime = (isoString) => {
+                    if (!isoString) return ''
+                    return isoString.split('T')[0]
+                }
+
+                // 获取情感颜色
+                const getSentimentColor = (score) => {
+                    if (score >= 80) return 'text-red-600'
+                    if (score >= 60) return 'text-red-400'
+                    if (score <= 40) return 'text-green-600'
+                    return 'text-yellow-500'
+                }
+
+                // 获取情感图标 Class (Phosphor Icons)
+                const getSentimentIcon = (advice) => {
+                    const map = {
+                        '买入': 'ph-fill ph-arrow-circle-up',
+                        '强烈买入': 'ph-fill ph-arrow-fat-up',
+                        '卖出': 'ph-fill ph-arrow-circle-down',
+                        '强烈卖出': 'ph-fill ph-arrow-fat-down',
+                        '观望': 'ph-fill ph-minus-circle',
+                        '持有': 'ph-fill ph-pause-circle'
+                    }
+                    return map[advice] || 'ph-fill ph-question'
+                }
+
+                // 加载股票列表
+                const loadStocks = async () => {
+                    try {
+                        const res = await fetch('/api/stock/list')
+                        stocks.value = await res.json()
+                        if (stocks.value.length > 0 && !selectedStock.value) {
+                            selectStock(stocks.value[0])
+                        }
+                    } catch (e) {
+                        console.error("加载股票失败", e)
+                    }
+                }
+
+                // 选择股票
+                const selectStock = async (stock) => {
+                    selectedStock.value = stock
+                    analysis.value = null // 重置分析，显示加载状态
+                    
+                    // 状态是通过 computed 属性自动计算的，不需要手动恢复
+                    
+                    // 并行加载 K 线和分析结果
+                    const klinePromise = fetch(`/api/stock/kline/${stock.code}`)
+                        .then(res => res.json())
+                        .then(data => renderChart(data))
+                        .catch(e => console.error("加载K线失败", e))
+
+                    const analysisPromise = fetch(`/api/stock/analysis/${stock.code}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            // 只有当当前选中的股票还是这个股票时才更新
+                            if (selectedStock.value && selectedStock.value.code === stock.code) {
+                                analysis.value = data
+                            }
+                        })
+                        .catch(e => console.error("加载分析失败", e))
+                    
+                    await Promise.all([klinePromise, analysisPromise])
+                }
+
+                // 渲染图表
+                const renderChart = (data) => {
+                    if (chartInstance) {
+                        chartInstance.dispose()
+                    }
+                    
+                    const container = document.getElementById('kline-chart')
+                    if (!container) return
+                    
+                    chartInstance = echarts.init(container)
+                    
+                    const option = {
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: { type: 'cross' }
+                        },
+                        grid: [
+                            { left: '10%', right: '8%', height: '50%' },
+                            { left: '10%', right: '8%', top: '63%', height: '16%' }
+                        ],
+                        xAxis: [
+                            { type: 'category', data: data.categoryData, scale: true, boundaryGap: false, axisLine: { onZero: false }, splitLine: { show: false }, min: 'dataMin', max: 'dataMax' },
+                            { type: 'category', gridIndex: 1, data: data.categoryData, scale: true, boundaryGap: false, axisLine: { onZero: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false }, min: 'dataMin', max: 'dataMax' }
+                        ],
+                        yAxis: [
+                            { scale: true, splitArea: { show: true } },
+                            { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } }
+                        ],
+                        dataZoom: [
+                            { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },
+                            { show: true, xAxisIndex: [0, 1], type: 'slider', top: '85%', start: 50, end: 100 }
+                        ],
+                        series: [
+                            {
+                                name: '日K',
+                                type: 'candlestick',
+                                data: data.values,
+                                itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' }
+                            },
+                            { name: 'MA5', type: 'line', data: data.ma5, smooth: true, lineStyle: { opacity: 0.5 } },
+                            { name: 'MA10', type: 'line', data: data.ma10, smooth: true, lineStyle: { opacity: 0.5 } },
+                            { name: 'MA20', type: 'line', data: data.ma20, smooth: true, lineStyle: { opacity: 0.5 } },
+                            {
+                                name: 'Volume',
+                                type: 'bar',
+                                xAxisIndex: 1,
+                                yAxisIndex: 1,
+                                data: data.volumes
+                            }
+                        ]
+                    }
+                    chartInstance.setOption(option)
+                }
+
+                // 手动触发抓取 (仅更新数据)
+                const fetchData = async () => {
+                    if (!selectedStock.value) return
+                    const code = selectedStock.value.code
+                    
+                    if (fetchingStatus.value[code]) return
+                    
+                    const initialTime = selectedStock.value.updated_at
+                    fetchingStatus.value[code] = true
+                    
+                    try {
+                        const res = await fetch(`/api/stock/fetch/${code}`, { method: 'POST' })
+                        if (!res.ok) throw new Error("触发失败")
+                        
+                        let attempts = 0
+                        const maxAttempts = 30
+                        
+                        const pollInterval = setInterval(async () => {
+                            attempts++
+                            try {
+                                const listRes = await fetch('/api/stock/list')
+                                const listData = await listRes.json()
+                                const updatedStock = listData.find(s => s.code === code)
+                                const hasNewData = updatedStock && ((!initialTime && updatedStock.updated_at) || (initialTime && updatedStock.updated_at !== initialTime))
+                                
+                                if (hasNewData || attempts >= maxAttempts) {
+                                    clearInterval(pollInterval)
+                                    fetchingStatus.value[code] = false
+                                    stocks.value = listData
+                                    // 如果当前选中的还是这个股票，更新视图
+                                    if (selectedStock.value && selectedStock.value.code === code) {
+                                        await selectStock(updatedStock)
+                                    }
+                                }
+                            } catch (err) { console.error(err) }
+                        }, 2000)
+                    } catch (e) {
+                        console.error(e)
+                        fetchingStatus.value[code] = false
+                        showToast("抓取失败", 'error')
+                    }
+                }
+
+                // 触发 AI 分析
+                const analyzeData = async () => {
+                    if (!selectedStock.value) return
+                    const code = selectedStock.value.code
+                    
+                    if (analyzingStatus.value[code]) return
+                    
+                    // 记录当前分析结果的时间戳（如果有）
+                    const initialTime = analysis.value ? analysis.value.created_at : null
+                    
+                    analyzingStatus.value[code] = true
+                    
+                    try {
+                        const res = await fetch(`/api/stock/analyze/${code}`, { method: 'POST' })
+                        if (!res.ok) throw new Error("触发分析失败")
+                        
+                        // 轮询检查分析结果
+                        let attempts = 0
+                        const maxAttempts = 60 // 120秒超时
+                        
+                        const pollInterval = setInterval(async () => {
+                            attempts++
+                            try {
+                                // 无论当前是否选中该股票，都要检查结果
+                                const analysisRes = await fetch(`/api/stock/analysis/${code}`)
+                                const newAnalysis = await analysisRes.json()
+                                
+                                // 检查是否有新结果
+                                const hasNewResult = newAnalysis.operation_advice !== '待更新' && (
+                                    !initialTime ||
+                                    (newAnalysis.created_at && newAnalysis.created_at !== initialTime)
+                                )
+                                
+                                if (hasNewResult || attempts >= maxAttempts) {
+                                    clearInterval(pollInterval)
+                                    
+                                    // 更新全局状态记录
+                                    analyzingStatus.value[code] = false
+                                    
+                                    // 只有当前选中股票是该股票时，才更新界面显示
+                                    if (selectedStock.value && selectedStock.value.code === code) {
+                                        if (hasNewResult) {
+                                            analysis.value = newAnalysis
+                                        }
+                                    }
+                                    
+                                    if (hasNewResult) {
+                                        console.log(`[${code}] AI 分析结果已更新`)
+                                    } else {
+                                        console.warn(`[${code}] AI 分析超时或未更新`)
+                                    }
+                                }
+                            } catch (err) { console.error(err) }
+                        }, 2000)
+                    } catch (e) {
+                        console.error(e)
+                        analyzingStatus.value[code] = false
+                        showToast("分析任务触发失败", 'error')
+                    }
+                }
+
+                // 加载配置
+                const loadConfig = async () => {
+                    try {
+                        // 添加时间戳防止缓存
+                        const res = await fetch(`/api/config/?t=${Date.now()}`)
+                        const newConfig = await res.json()
+                        // 强制更新所有配置项
+                        Object.keys(newConfig).forEach(key => {
+                            config.value[key] = newConfig[key]
+                        })
+                        console.log('配置已重新加载:', config.value)
+                    } catch (e) {
+                        console.error("加载配置失败", e)
+                    }
+                }
+
+                // 保存配置
+                const saveConfig = async () => {
+                    try {
+                        const res = await fetch('/api/config/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(config.value)
+                        })
+                        const result = await res.json()
+                        
+                        if (!res.ok) throw new Error(result.detail || "保存失败")
+                        
+                        showToast(result.message, 'success')
+                        
+                        // 稍微延迟后重新加载配置，确保后端已完成重启/重载
+                        setTimeout(async () => {
+                            await loadConfig()
+                        }, 500)
+                    } catch (e) {
+                        showToast("保存失败: " + e.message, 'error')
+                    }
+                }
+
+                onMounted(() => {
+                    loadStocks()
+                    loadConfig()
+                    
+                    // 监听窗口大小变化调整图表
+                        window.addEventListener('resize', () => {
+                            chartInstance && chartInstance.resize()
+                        })
+                        
+                        // 加载大盘复盘
+                        loadMarketReview()
+                    })
+    
+                    // 加载大盘复盘数据
+                    const loadMarketReview = async () => {
+                        try {
+                            const res = await fetch('/api/market/latest')
+                            marketReview.value = await res.json()
+                        } catch (e) {
+                            console.error("加载大盘复盘失败", e)
+                        }
+                    }
+    
+                    // 触发大盘分析
+                    const analyzeMarket = async () => {
+                        if (isMarketAnalyzing.value) return
+                        
+                        isMarketAnalyzing.value = true
+                        const initialTime = marketReview.value ? marketReview.value.updated_at : null
+                        
+                        try {
+                            const res = await fetch('/api/market/analyze', { method: 'POST' })
+                            if (!res.ok) throw new Error("触发分析失败")
+                            
+                            // 轮询检查结果
+                            let attempts = 0
+                            const maxAttempts = 60
+                            
+                            const pollInterval = setInterval(async () => {
+                                attempts++
+                                try {
+                                    const reviewRes = await fetch('/api/market/latest')
+                                    const newReview = await reviewRes.json()
+                                    
+                                    const hasNewResult = newReview.overview && (
+                                        !initialTime || (newReview.updated_at && newReview.updated_at !== initialTime)
+                                    )
+                                    
+                                    if (hasNewResult || attempts >= maxAttempts) {
+                                        clearInterval(pollInterval)
+                                        isMarketAnalyzing.value = false
+                                        if (hasNewResult) {
+                                            marketReview.value = newReview
+                                        }
+                                    }
+                                } catch (err) { console.error(err) }
+                            }, 2000)
+                            
+                        } catch (e) {
+                            console.error(e)
+                            isMarketAnalyzing.value = false
+                            showToast("大盘分析触发失败", 'error')
+                        }
+                    }
+    
+                    return {
+                        currentTab,
+                        stocks,
+                        selectedStock,
+                        config,
+                        analysis,
+                        marketReview,
+                        isFetching,
+                        isAnalyzing,
+                        isMarketAnalyzing,
+                        toasts,
+                        fetchData,
+                        analyzeData,
+                        analyzeMarket,
+                        selectStock,
+                        saveConfig,
+                        formatTime,
+                        getSentimentColor,
+                        getSentimentIcon
+                    }
+                }
+        }).mount('#app')
+    </script>
+</body>
+</html>
