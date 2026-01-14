@@ -552,67 +552,39 @@ class StockAnalysisPipeline:
         
         # 发送通知
         if results and send_notification and not dry_run:
-            self._send_notifications(results)
+            self._display_results(results)
         
         return results
     
-    def _send_notifications(self, results: List[AnalysisResult]) -> None:
+    def _display_results(self, results: List[AnalysisResult]) -> None:
         """
-        发送分析结果通知
-        
-        生成决策仪表盘格式的报告
-        
+        在控制台显示分析结果
+
+        生成决策仪表盘格式并直接输出到控制台
+
         Args:
             results: 分析结果列表
         """
         try:
-            logger.info("生成决策仪表盘日报...")
-            
+            logger.info("生成决策仪表盘...")
+
             # 生成决策仪表盘格式的详细日报
             report = self.notifier.generate_dashboard_report(results)
-            
+
             # 保存到本地
             filepath = self.notifier.save_report_to_file(report)
-            logger.info(f"决策仪表盘日报已保存: {filepath}")
-            
-            # 推送通知
-            if self.notifier.is_available():
-                channels = self.notifier.get_available_channels()
+            logger.info(f"决策仪表盘已保存: {filepath}")
 
-                # 企业微信：只发精简版（平台限制）
-                wechat_success = False
-                if NotificationChannel.WECHAT in channels:
-                    dashboard_content = self.notifier.generate_wechat_dashboard(results)
-                    logger.info(f"企业微信仪表盘长度: {len(dashboard_content)} 字符")
-                    logger.debug(f"企业微信推送内容:\n{dashboard_content}")
-                    wechat_success = self.notifier.send_to_wechat(dashboard_content)
+            # 在控制台显示结果
+            print("\n" + "=" * 80)
+            print("📊 决策仪表盘")
+            print("=" * 80)
+            print(report)
+            print("=" * 80)
+            print(f"\n✅ 完整报告已保存至: {filepath}\n")
 
-                # 其他渠道：发完整报告（避免自定义 Webhook 被 wechat 截断逻辑污染）
-                non_wechat_success = False
-                for channel in channels:
-                    if channel == NotificationChannel.WECHAT:
-                        continue
-                    if channel == NotificationChannel.FEISHU:
-                        non_wechat_success = self.notifier.send_to_feishu(report) or non_wechat_success
-                    elif channel == NotificationChannel.TELEGRAM:
-                        non_wechat_success = self.notifier.send_to_telegram(report) or non_wechat_success
-                    elif channel == NotificationChannel.EMAIL:
-                        non_wechat_success = self.notifier.send_to_email(report) or non_wechat_success
-                    elif channel == NotificationChannel.CUSTOM:
-                        non_wechat_success = self.notifier.send_to_custom(report) or non_wechat_success
-                    else:
-                        logger.warning(f"未知通知渠道: {channel}")
-
-                success = wechat_success or non_wechat_success
-                if success:
-                    logger.info("决策仪表盘推送成功")
-                else:
-                    logger.warning("决策仪表盘推送失败")
-            else:
-                logger.info("通知渠道未配置，跳过推送")
-                
         except Exception as e:
-            logger.error(f"发送通知失败: {e}")
+            logger.error(f"显示结果失败: {e}")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -716,17 +688,14 @@ def run_market_review(notifier: NotificationService, analyzer=None, search_servi
                 report_filename
             )
             logger.info(f"大盘复盘报告已保存: {filepath}")
-            
-            # 推送通知
-            if notifier.is_available():
-                # 添加标题
-                report_content = f"🎯 大盘复盘\n\n{review_report}"
-                
-                success = notifier.send(report_content)
-                if success:
-                    logger.info("大盘复盘推送成功")
-                else:
-                    logger.warning("大盘复盘推送失败")
+
+            # 在控制台显示结果
+            print("\n" + "=" * 80)
+            print("🎯 大盘复盘")
+            print("=" * 80)
+            print(review_report)
+            print("=" * 80)
+            print(f"\n✅ 完整报告已保存至: {filepath}\n")
             
             return review_report
         
@@ -785,39 +754,6 @@ def run_full_analysis(
         
         logger.info("\n任务执行完成")
 
-        # === 新增：生成飞书云文档 ===
-        try:
-            feishu_doc = FeishuDocManager()
-            if feishu_doc.is_configured() and (results or market_report):
-                logger.info("正在创建飞书云文档...")
-
-                # 1. 准备标题 "01-01 13:01大盘复盘"
-                tz_cn = timezone(timedelta(hours=8))
-                now = datetime.now(tz_cn)
-                doc_title = f"{now.strftime('%Y-%m-%d %H:%M')} 大盘复盘"
-
-                # 2. 准备内容 (拼接个股分析和大盘复盘)
-                full_content = ""
-
-                # 添加大盘复盘内容（如果有）
-                if market_report:
-                    full_content += f"# 📈 大盘复盘\n\n{market_report}\n\n---\n\n"
-
-                # 添加个股决策仪表盘（使用 NotificationService 生成）
-                if results:
-                    dashboard_content = pipeline.notifier.generate_dashboard_report(results)
-                    full_content += f"# 🚀 个股决策仪表盘\n\n{dashboard_content}"
-
-                # 3. 创建文档
-                doc_url = feishu_doc.create_daily_doc(doc_title, full_content)
-                if doc_url:
-                    logger.info(f"飞书云文档创建成功: {doc_url}")
-                    # 可选：将文档链接也推送到群里
-                    pipeline.notifier.send(f"[{now.strftime('%Y-%m-%d %H:%M')}] 复盘文档创建成功: {doc_url}")
-
-        except Exception as e:
-            logger.error(f"飞书文档生成失败: {e}")
-        
     except Exception as e:
         logger.exception(f"分析流程执行失败: {e}")
 
