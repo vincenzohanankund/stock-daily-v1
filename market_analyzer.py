@@ -251,15 +251,14 @@ class MarketAnalyzer:
             logger.info("[大盘] 获取北向资金...")
             
             # 获取北向资金数据
-            df = ak.stock_hsgt_north_net_flow_in_em(symbol="北上")
+            df = ak.stock_hsgt_hist_em(symbol="北向资金")
             
             if df is not None and not df.empty:
                 # 取最新一条数据
                 latest = df.iloc[-1]
-                if '当日净流入' in df.columns:
-                    overview.north_flow = float(latest['当日净流入']) / 1e8  # 转为亿元
-                elif '净流入' in df.columns:
-                    overview.north_flow = float(latest['净流入']) / 1e8
+                # akshare 返回的 "当日成交净买额" 单位已经是亿元
+                if '当日成交净买额' in df.columns:
+                    overview.north_flow = float(latest['当日成交净买额'])
                     
                 logger.info(f"[大盘] 北向资金净流入: {overview.north_flow:.2f}亿")
                 
