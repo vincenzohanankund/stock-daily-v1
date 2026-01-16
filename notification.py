@@ -1117,12 +1117,17 @@ class NotificationService:
         )
         
         if response.status_code == 200:
-            result = response.json()
-            if result.get('errcode') == 0:
-                logger.info("企业微信消息发送成功")
-                return True
-            else:
-                logger.error(f"企业微信返回错误: {result}")
+            try:
+                result = response.json()
+                if isinstance(result, dict) and result.get('errcode') == 0:
+                    logger.info("企业微信消息发送成功")
+                    return True
+                else:
+                    logger.error(f"企业微信返回错误: {result}")
+                    return False
+            except json.JSONDecodeError:
+                # API返回的不是JSON格式，可能是字符串
+                logger.error(f"企业微信返回非JSON响应: {response.text}")
                 return False
         else:
             logger.error(f"企业微信请求失败: {response.status_code}")
@@ -1334,16 +1339,25 @@ class NotificationService:
             logger.debug(f"飞书响应内容: {response.text}")
 
             if response.status_code == 200:
-                result = response.json()
-                code = result.get('code') if 'code' in result else result.get('StatusCode')
-                if code == 0:
-                    logger.info("飞书消息发送成功")
-                    return True
-                else:
-                    error_msg = result.get('msg') or result.get('StatusMessage', '未知错误')
-                    error_code = result.get('code') or result.get('StatusCode', 'N/A')
-                    logger.error(f"飞书返回错误 [code={error_code}]: {error_msg}")
-                    logger.error(f"完整响应: {result}")
+                try:
+                    result = response.json()
+                    if isinstance(result, dict):
+                        code = result.get('code') if 'code' in result else result.get('StatusCode')
+                        if code == 0:
+                            logger.info("飞书消息发送成功")
+                            return True
+                        else:
+                            error_msg = result.get('msg') or result.get('StatusMessage', '未知错误')
+                            error_code = result.get('code') or result.get('StatusCode', 'N/A')
+                            logger.error(f"飞书返回错误 [code={error_code}]: {error_msg}")
+                            logger.error(f"完整响应: {result}")
+                            return False
+                    else:
+                        logger.error(f"飞书返回非字典响应: {result}")
+                        return False
+                except json.JSONDecodeError:
+                    # API返回的不是JSON格式，可能是字符串
+                    logger.error(f"飞书返回非JSON响应: {response.text}")
                     return False
             else:
                 logger.error(f"飞书请求失败: HTTP {response.status_code}")
@@ -1653,26 +1667,39 @@ class NotificationService:
         response = requests.post(api_url, json=payload, timeout=10)
         
         if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                logger.info("Telegram 消息发送成功")
-                return True
-            else:
-                error_desc = result.get('description', '未知错误')
-                logger.error(f"Telegram 返回错误: {error_desc}")
+            try:
+                result = response.json()
+                if isinstance(result, dict) and result.get('ok'):
+                    logger.info("Telegram 消息发送成功")
+                    return True
+                else:
+                    if isinstance(result, dict):
+                        error_desc = result.get('description', '未知错误')
+                        logger.error(f"Telegram 返回错误: {error_desc}")
+                        
+                        # 如果 Markdown 解析失败，尝试纯文本发送
+                        if 'parse' in error_desc.lower() or 'markdown' in error_desc.lower():
+                            logger.info("尝试使用纯文本格式重新发送...")
+                            payload['parse_mode'] = None
+                            payload['text'] = text  # 使用原始文本
+                            del payload['parse_mode']
+                            
+                            response = requests.post(api_url, json=payload, timeout=10)
+                            if response.status_code == 200:
+                                try:
+                                    retry_result = response.json()
+                                    if isinstance(retry_result, dict) and retry_result.get('ok'):
+                                        logger.info("Telegram 消息发送成功（纯文本）")
+                                        return True
+                                except json.JSONDecodeError:
+                                    logger.error(f"Telegram 重试返回非JSON响应: {response.text}")
+                    else:
+                        logger.error(f"Telegram 返回非字典响应: {result}")
                 
-                # 如果 Markdown 解析失败，尝试纯文本发送
-                if 'parse' in error_desc.lower() or 'markdown' in error_desc.lower():
-                    logger.info("尝试使用纯文本格式重新发送...")
-                    payload['parse_mode'] = None
-                    payload['text'] = text  # 使用原始文本
-                    del payload['parse_mode']
-                    
-                    response = requests.post(api_url, json=payload, timeout=10)
-                    if response.status_code == 200 and response.json().get('ok'):
-                        logger.info("Telegram 消息发送成功（纯文本）")
-                        return True
-                
+                return False
+            except json.JSONDecodeError:
+                # API返回的不是JSON格式，可能是字符串
+                logger.error(f"Telegram 返回非JSON响应: {response.text}")
                 return False
         else:
             logger.error(f"Telegram 请求失败: HTTP {response.status_code}")
@@ -1793,8 +1820,30 @@ class NotificationService:
                 )
                 
                 if response.status_code == 200:
-                    logger.info(f"自定义 Webhook {i+1} 推送成功")
-                    success_count += 1
+                    # 检查是否为钉钉Webhook
+                    is_dingtalk = 'dingtalk' in url.lower() or 'oapi.dingtalk.com' in url.lower()
+                    
+                    if is_dingtalk:
+                        # 钉钉API返回JSON格式的响应，需要检查是否成功
+                        try:
+                            result = response.json()
+                            if isinstance(result, dict):
+                                errcode = result.get('errcode')
+                                if errcode == 0:
+                                    logger.info(f"自定义 Webhook {i+1}（钉钉）推送成功")
+                                    success_count += 1
+                                else:
+                                    errmsg = result.get('errmsg', '未知错误')
+                                    logger.error(f"自定义 Webhook {i+1}（钉钉）返回错误 [code={errcode}]: {errmsg}")
+                            else:
+                                logger.error(f"自定义 Webhook {i+1}（钉钉）返回非字典响应: {result}")
+                        except json.JSONDecodeError:
+                            # 钉钉API返回非JSON响应，可能是网络问题或API变更
+                            logger.error(f"自定义 Webhook {i+1}（钉钉）返回非JSON响应: {response.text}")
+                    else:
+                        # 非钉钉Webhook，只检查状态码
+                        logger.info(f"自定义 Webhook {i+1} 推送成功")
+                        success_count += 1
                 else:
                     logger.error(f"自定义 Webhook {i+1} 推送失败: HTTP {response.status_code}")
                     logger.debug(f"响应内容: {response.text[:200]}")
