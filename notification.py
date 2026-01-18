@@ -1033,6 +1033,18 @@ class NotificationService:
                 logger.warning("企业微信 Webhook 未配置，跳过文件推送")
                 return False
 
+            # --- 强制转换逻辑：将 .md 转换为 .txt ---
+            if file_path.endswith('.md'):
+                new_path = file_path.replace('.md', '.txt')
+                # 如果目标 txt 已存在，先删除它以防报错
+                if os.path.exists(new_path):
+                    os.remove(new_path)
+                os.rename(file_path, new_path)
+                file_path = new_path  
+               # 更新文件路径为新生成的 .txt
+            # ---------------------------------------
+
+           
             # 1. 提取 Key 并上传文件
             key = webhook_url.split('key=')[-1]
             upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={key}&type=file"
