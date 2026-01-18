@@ -617,7 +617,8 @@ class StockAnalysisPipeline:
                     dashboard_content = self.notifier.generate_wechat_dashboard(results)
                     logger.info(f"企业微信仪表盘长度: {len(dashboard_content)} 字符")
                     logger.debug(f"企业微信推送内容:\n{dashboard_content}")
-                    wechat_success = self.notifier.send_to_wechat(dashboard_content)
+                   # wechat_success = self.notifier.send_to_wechat(dashboard_content)
+                wechat_success = self.notifier.send_file_to_wechat(filepath)
 
                 # 其他渠道：发完整报告（避免自定义 Webhook 被 wechat 截断逻辑污染）
                 non_wechat_success = False
