@@ -44,7 +44,7 @@ jobs:
       - name: 执行股票分析
         env:
           # Gemini AI
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ AIzaSyDnNko1qqidL23QYSD4lfQm5zUXNtUmpjE }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-3-flash-preview' }}
           GEMINI_MODEL_FALLBACK: ${{ secrets.GEMINI_MODEL_FALLBACK || 'gemini-2.5-flash' }}
           GEMINI_REQUEST_DELAY: '3.0'  # GitHub Actions 建议增加延时
@@ -54,7 +54,7 @@ jobs:
           
           # 搜索服务
           BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
-          TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          TAVILY_API_KEYS: ${{ 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 }}
           SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
           
           # OpenAI 兼容 API（备选）
@@ -66,7 +66,7 @@ jobs:
           # 方式一：企业微信
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
           # 方式二：飞书
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_WEBHOOK_URL: ${{ https://www.feishu.cn/flow/api/trigger-webhook/501c6790bf605b1a75acafc11b34a84a }}
           # 方式三：Telegram（需同时配置 Bot Token 和 Chat ID）
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -83,7 +83,7 @@ jobs:
 
           
           # 自选股列表 (从 secrets 或使用默认值)
-          STOCK_LIST: ${{ secrets.STOCK_LIST || '600519' }}
+          STOCK_LIST: ${{ secrets.STOCK_LIST || '002195,000547，601698，600693' }}
           
           # 其他配置
           LOG_LEVEL: INFO
