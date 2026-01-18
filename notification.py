@@ -1022,7 +1022,45 @@ class NotificationService:
         ])
         
         return "\n".join(lines)
-    
+
+def send_file_to_wechat(self, file_path: str) -> bool:
+        """通过企业微信机器人发送文件"""
+        try:
+            # 获取 Webhook 地址
+            webhook_url = os.getenv("WECHAT_WEBHOOK_URL")
+            if not webhook_url:
+                logger.error("未配置 WECHAT_WEBHOOK_URL")
+                return False
+
+            # 1. 提取 Key 并上传文件
+            key = webhook_url.split('key=')[-1]
+            upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={key}&type=file"
+            
+            filename = os.path.basename(file_path)
+            with open(file_path, 'rb') as f:
+                # 企业微信接口要求字段名为 'media'
+                response = requests.post(upload_url, files={'media': (filename, f)})
+                result = response.json()
+                media_id = result.get('media_id')
+
+            if not media_id:
+                logger.error(f"企业微信文件上传失败: {result}")
+                return False
+
+            # 2. 使用 media_id 发送文件消息
+            send_payload = {
+                "msgtype": "file",
+                "file": {"media_id": media_id}
+            }
+            send_response = requests.post(webhook_url, json=send_payload)
+            return send_response.json().get('errcode') == 0
+
+        except Exception as e:
+            logger.error(f"企业微信发送文件异常: {e}")
+            return False
+
+
+   
     def send_to_wechat(self, content: str) -> bool:
         """
         推送消息到企业微信机器人
