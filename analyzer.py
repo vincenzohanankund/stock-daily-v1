@@ -1001,12 +1001,12 @@ class GeminiAnalyzer:
             # 格式化输入（包含技术面数据和新闻）
             prompt = self._format_prompt(context, name, news_context)
             
-            # 获取模型名称
-            model_name = getattr(self, '_current_model_name', None)
-            if not model_name:
-                model_name = getattr(self._model, '_model_name', 'unknown')
-                if hasattr(self._model, 'model_name'):
-                    model_name = self._model.model_name
+            # 获取模型名称（统一使用 _current_model_name）
+            # 新旧 SDK 都已在初始化时设置此属性为字符串
+            model_name = getattr(self, '_current_model_name', 'unknown')
+            if not model_name or model_name == 'unknown':
+                # 兜底：尝试从 _model 获取（兼容旧代码）
+                model_name = str(self._model) if self._model else 'unknown'
             
             logger.info(f"========== AI 分析 {name}({code}) ==========")
             logger.info(f"[LLM配置] 模型: {model_name}")
