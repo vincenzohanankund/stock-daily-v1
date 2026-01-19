@@ -51,7 +51,7 @@ class YfinanceFetcher(BaseFetcher):
     """
     
     name = "YfinanceFetcher"
-    priority = 4
+    priority = 1
     
     def __init__(self):
         """初始化 YfinanceFetcher"""
@@ -74,20 +74,20 @@ class YfinanceFetcher(BaseFetcher):
         code = stock_code.strip()
         
         # 已经包含后缀的情况
-        if '.SS' in code.upper() or '.SZ' in code.upper():
+        if '.TW' in code.upper() or '.TW' in code.upper():
             return code.upper()
         
         # 去除可能的后缀
-        code = code.replace('.SH', '').replace('.sh', '')
+        code = code.replace('.TW', '').replace('.tw', '')
         
         # 根据代码前缀判断市场
         if code.startswith(('600', '601', '603', '688')):
-            return f"{code}.SS"
+            return f"{code}.TW"
         elif code.startswith(('000', '002', '300')):
-            return f"{code}.SZ"
+            return f"{code}.TW"
         else:
-            logger.warning(f"无法确定股票 {code} 的市场，默认使用深市")
-            return f"{code}.SZ"
+            logger.warning(f"无法确定股票 {code} 的市场，默认使用台股")
+            return f"{code}.TW"
     
     @retry(
         stop=stop_after_attempt(3),
