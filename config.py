@@ -59,6 +59,8 @@ class Config:
     tavily_api_keys: List[str] = field(default_factory=list)  # Tavily API Keys
     serpapi_keys: List[str] = field(default_factory=list)  # SerpAPI Keys
     searxng_url: Optional[str] = None  # SearXNG 实例 URL（免费后备搜索引擎）
+    searxng_engines: str = "google,bing,baidu"  # SearXNG 使用的搜索引擎（逗号分隔）
+    searxng_language: str = "zh-CN"  # SearXNG 搜索语言
     
     # === 通知配置（可同时配置多个，全部推送）===
     
@@ -199,6 +201,8 @@ class Config:
             tavily_api_keys=tavily_api_keys,
             serpapi_keys=serpapi_keys,
             searxng_url=os.getenv('SEARXNG_URL'),
+            searxng_engines=os.getenv('SEARXNG_ENGINES', 'google,bing,baidu'),
+            searxng_language=os.getenv('SEARXNG_LANGUAGE', 'zh-CN'),
             wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),

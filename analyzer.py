@@ -485,11 +485,21 @@ class GeminiAnalyzer:
         """
         初始化 Gemini 模型（使用新的 google-genai SDK）
 
+        优先级：
+        1. 尝试新版 google-genai SDK
+        2. 新版不可用时回退到旧版 google.generativeai SDK
+
         配置：
         - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
         - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
         - 设置 120 秒请求超时（与旧版 SDK 保持一致）
         """
+        # 从配置获取模型名称（放在 try 外面，避免影响旧版 SDK 回退）
+        config = get_config()
+        model_name = config.gemini_model
+        fallback_model = config.gemini_model_fallback
+
+        # 尝试使用新版 SDK
         try:
             from google import genai
             from google.genai import types
@@ -498,14 +508,9 @@ class GeminiAnalyzer:
             # 设置 120 秒超时，与旧版 SDK 的 request_options={"timeout": 120} 保持一致
             self._genai_client = genai.Client(
                 api_key=self._api_key,
-                http_options={"timeout": 120}  # 新版 SDK 使用 http_options 设置超时
+                http_options={"timeout": 120}
             )
             self._genai_types = types
-
-            # 从配置获取模型名称
-            config = get_config()
-            model_name = config.gemini_model
-            fallback_model = config.gemini_model_fallback
 
             # 不再使用 Google Search Grounding（已知有兼容性问题）
             # 改为使用外部搜索服务（Tavily/SerpAPI）预先获取新闻
@@ -517,30 +522,30 @@ class GeminiAnalyzer:
             self._fallback_model_name = fallback_model
             logger.info(f"Gemini 客户端初始化成功 (模型: {model_name}, 超时: 120s)")
 
-        except ImportError as e:
+        except ImportError:
             # 新 SDK 未安装，尝试回退到旧 SDK
-            logger.warning(f"google-genai SDK 未安装: {e}，尝试使用旧版 google.generativeai")
-            self._init_model_legacy()
+            logger.warning("google-genai SDK 未安装，尝试使用旧版 google.generativeai")
+            self._init_model_legacy(model_name, fallback_model)
         except Exception as e:
-            logger.error(f"Gemini 模型初始化失败: {e}")
-            self._model = None
+            # 新 SDK 初始化失败，尝试回退到旧 SDK
+            logger.warning(f"google-genai SDK 初始化失败: {e}，尝试使用旧版 google.generativeai")
+            self._init_model_legacy(model_name, fallback_model)
 
-    def _init_model_legacy(self) -> None:
+    def _init_model_legacy(self, model_name: str, fallback_model: str) -> None:
         """
         初始化 Gemini 模型（旧版 google.generativeai SDK，作为后备）
 
         当新版 SDK 不可用时使用此方法
+
+        Args:
+            model_name: 主模型名称
+            fallback_model: 备选模型名称
         """
         try:
             import google.generativeai as genai
 
             # 配置 API Key
             genai.configure(api_key=self._api_key)
-
-            # 从配置获取模型名称
-            config = get_config()
-            model_name = config.gemini_model
-            fallback_model = config.gemini_model_fallback
 
             # 标记为使用旧版 SDK
             self._use_legacy_sdk = True

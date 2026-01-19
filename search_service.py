@@ -557,16 +557,32 @@ class SearXNGSearchProvider(BaseSearchProvider):
     ```
     """
 
-    def __init__(self, api_keys: Optional[List[str]] = None, base_url: Optional[str] = None):
+    def __init__(
+        self,
+        api_keys: Optional[List[str]] = None,
+        base_url: Optional[str] = None,
+        engines: str = "google,bing,baidu",
+        language: str = "zh-CN"
+    ):
         """
         初始化 SearXNG 搜索引擎
 
         Args:
             api_keys: 保留参数（SearXNG 不需要 API Key，但保持接口兼容）
             base_url: SearXNG 实例 URL（必须提供，不使用默认值以确保安全）
+            engines: 使用的搜索引擎（逗号分隔），默认 "google,bing,baidu"
+            language: 搜索语言，默认 "zh-CN"
 
         Raises:
             ValueError: 如果未提供 base_url
+
+        配置说明：
+            在 .env 文件中添加：
+            ```
+            SEARXNG_URL=https://your-searxng-instance.com/
+            SEARXNG_ENGINES=google,bing,baidu  # 可选，默认 google,bing,baidu
+            SEARXNG_LANGUAGE=zh-CN             # 可选，默认 zh-CN
+            ```
         """
         # 传递空的 keys 列表以保持接口兼容
         super().__init__(api_keys or [], "SearXNG")
@@ -580,6 +596,10 @@ class SearXNGSearchProvider(BaseSearchProvider):
 
         # 规范化 URL（确保以 / 结尾）
         self._base_url = base_url if base_url.endswith('/') else base_url + '/'
+
+        # 保存搜索引擎和语言配置
+        self._engines = engines
+        self._language = language
 
     @property
     def is_available(self) -> bool:
@@ -609,8 +629,8 @@ class SearXNGSearchProvider(BaseSearchProvider):
             params = {
                 "q": query,
                 "format": "json",
-                "engines": "google,bing,baidu",  # 使用多个搜索引擎
-                "language": "zh-CN",
+                "engines": self._engines,  # 使用配置的搜索引擎
+                "language": self._language,  # 使用配置的语言
                 "time_range": "",  # 不限制时间范围
                 "pageno": 1,  # 第一页（从 1 开始，不是 0）
             }
@@ -774,6 +794,8 @@ class SearchService:
         tavily_keys: Optional[List[str]] = None,
         serpapi_keys: Optional[List[str]] = None,
         searxng_url: Optional[str] = None,
+        searxng_engines: str = "google,bing,baidu",
+        searxng_language: str = "zh-CN",
     ):
         """
         初始化搜索服务
@@ -784,6 +806,8 @@ class SearchService:
             serpapi_keys: SerpAPI Key 列表
             searxng_url: SearXNG 实例 URL（必须提供才能启用 SearXNG）
                        ⚠️ 不再提供默认实例，需自行配置或自部署
+            searxng_engines: SearXNG 使用的搜索引擎（逗号分隔），默认 "google,bing,baidu"
+            searxng_language: SearXNG 搜索语言，默认 "zh-CN"
         """
         self._providers: List[BaseSearchProvider] = []
 
@@ -807,7 +831,11 @@ class SearchService:
         # 只有在没有配置任何其他搜索引擎且提供了 searxng_url 时才启用
         if not self._providers and searxng_url:
             try:
-                self._providers.append(SearXNGSearchProvider(base_url=searxng_url))
+                self._providers.append(SearXNGSearchProvider(
+                    base_url=searxng_url,
+                    engines=searxng_engines,
+                    language=searxng_language
+                ))
                 logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（实例: {searxng_url}）")
             except ValueError as e:
                 logger.warning(f"SearXNG 初始化失败: {e}")
@@ -1093,18 +1121,20 @@ _search_service: Optional[SearchService] = None
 def get_search_service() -> SearchService:
     """获取搜索服务单例"""
     global _search_service
-    
+
     if _search_service is None:
         from config import get_config
         config = get_config()
-        
+
         _search_service = SearchService(
             bocha_keys=config.bocha_api_keys,
             tavily_keys=config.tavily_api_keys,
             serpapi_keys=config.serpapi_keys,
             searxng_url=config.searxng_url,
+            searxng_engines=config.searxng_engines,
+            searxng_language=config.searxng_language,
         )
-    
+
     return _search_service
 
 
