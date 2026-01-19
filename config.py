@@ -61,6 +61,7 @@ class Config:
     searxng_url: Optional[str] = None  # SearXNG 实例 URL（免费后备搜索引擎）
     searxng_engines: str = "google,bing,baidu"  # SearXNG 使用的搜索引擎（逗号分隔）
     searxng_language: str = "zh-CN"  # SearXNG 搜索语言
+    searxng_time_range: str = ""  # SearXNG 时间范围（留空表示不限制，可选: day, week, month, year）
     
     # === 通知配置（可同时配置多个，全部推送）===
     
@@ -203,6 +204,7 @@ class Config:
             searxng_url=os.getenv('SEARXNG_URL'),
             searxng_engines=os.getenv('SEARXNG_ENGINES', 'google,bing,baidu'),
             searxng_language=os.getenv('SEARXNG_LANGUAGE', 'zh-CN'),
+            searxng_time_range=os.getenv('SEARXNG_TIME_RANGE', ''),
             wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),

@@ -562,7 +562,8 @@ class SearXNGSearchProvider(BaseSearchProvider):
         api_keys: Optional[List[str]] = None,
         base_url: Optional[str] = None,
         engines: str = "google,bing,baidu",
-        language: str = "zh-CN"
+        language: str = "zh-CN",
+        time_range: str = ""
     ):
         """
         初始化 SearXNG 搜索引擎
@@ -572,6 +573,8 @@ class SearXNGSearchProvider(BaseSearchProvider):
             base_url: SearXNG 实例 URL（必须提供，不使用默认值以确保安全）
             engines: 使用的搜索引擎（逗号分隔），默认 "google,bing,baidu"
             language: 搜索语言，默认 "zh-CN"
+            time_range: 时间范围过滤（留空表示不限制）
+                       可选值: "day", "week", "month", "year" 或留空
 
         Raises:
             ValueError: 如果未提供 base_url
@@ -582,6 +585,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
             SEARXNG_URL=https://your-searxng-instance.com/
             SEARXNG_ENGINES=google,bing,baidu  # 可选，默认 google,bing,baidu
             SEARXNG_LANGUAGE=zh-CN             # 可选，默认 zh-CN
+            SEARXNG_TIME_RANGE=                # 可选，默认留空（不限制）
             ```
         """
         # 传递空的 keys 列表以保持接口兼容
@@ -600,6 +604,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
         # 保存搜索引擎和语言配置
         self._engines = engines
         self._language = language
+        self._time_range = time_range
 
     @property
     def is_available(self) -> bool:
@@ -631,7 +636,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                 "format": "json",
                 "engines": self._engines,  # 使用配置的搜索引擎
                 "language": self._language,  # 使用配置的语言
-                "time_range": "",  # 不限制时间范围
+                "time_range": self._time_range,  # 使用配置的时间范围
                 "pageno": 1,  # 第一页（从 1 开始，不是 0）
             }
 
@@ -796,6 +801,7 @@ class SearchService:
         searxng_url: Optional[str] = None,
         searxng_engines: str = "google,bing,baidu",
         searxng_language: str = "zh-CN",
+        searxng_time_range: str = "",
     ):
         """
         初始化搜索服务
@@ -808,6 +814,7 @@ class SearchService:
                        ⚠️ 不再提供默认实例，需自行配置或自部署
             searxng_engines: SearXNG 使用的搜索引擎（逗号分隔），默认 "google,bing,baidu"
             searxng_language: SearXNG 搜索语言，默认 "zh-CN"
+            searxng_time_range: SearXNG 时间范围过滤（留空表示不限制）
         """
         self._providers: List[BaseSearchProvider] = []
 
@@ -834,7 +841,8 @@ class SearchService:
                 self._providers.append(SearXNGSearchProvider(
                     base_url=searxng_url,
                     engines=searxng_engines,
-                    language=searxng_language
+                    language=searxng_language,
+                    time_range=searxng_time_range
                 ))
                 logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（实例: {searxng_url}）")
             except ValueError as e:
@@ -1133,6 +1141,7 @@ def get_search_service() -> SearchService:
             searxng_url=config.searxng_url,
             searxng_engines=config.searxng_engines,
             searxng_language=config.searxng_language,
+            searxng_time_range=config.searxng_time_range,
         )
 
     return _search_service
