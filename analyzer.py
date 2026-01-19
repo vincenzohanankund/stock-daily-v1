@@ -504,9 +504,7 @@ class GeminiAnalyzer:
             from google import genai
             from google.genai import types
             import os
-
-            # 准备 http_options，支持代理设置
-            http_opts = {"timeout": 120}
+            import httpx
 
             # 读取代理设置（支持小写和大写环境变量）
             proxy_url = (
@@ -516,18 +514,25 @@ class GeminiAnalyzer:
                 os.getenv("http_proxy")
             )
 
+            # 创建自定义 httpx.Client（支持代理）
             if proxy_url:
-                # 通过 clientArgs 传递代理设置给 httpx.Client
-                http_opts["clientArgs"] = {"proxy": proxy_url, "trust_env": True}
+                http_client = httpx.Client(
+                    proxy=proxy_url,
+                    timeout=120,
+                    trust_env=True  # 同时也信任环境变量
+                )
                 logger.info(f"检测到代理设置: {proxy_url}")
             else:
-                # 没有代理时也设置 trust_env=True，以便 httpx 尝试自动检测代理
-                http_opts["clientArgs"] = {"trust_env": True}
+                http_client = httpx.Client(
+                    timeout=120,
+                    trust_env=True  # 自动检测环境变量中的代理
+                )
 
             # 创建客户端（新 SDK 方式）
+            # 使用 httpxClient 参数直接传入自定义的 httpx.Client
             self._genai_client = genai.Client(
                 api_key=self._api_key,
-                http_options=http_opts
+                http_options={"httpxClient": http_client}
             )
             self._genai_types = types
 
