@@ -12,8 +12,9 @@ A股自选股智能分析系统 - 存储层
 """
 
 import logging
+import math
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
 
 import pandas as pd
@@ -44,6 +45,66 @@ logger = logging.getLogger(__name__)
 
 # SQLAlchemy ORM 基类
 Base = declarative_base()
+
+
+# === 辅助函数 ===
+
+def _safe_float(value: Any) -> Optional[float]:
+    """
+    安全地将值转换为 float，处理 NaN/None
+
+    Args:
+        value: 输入值（可能是 int, float, NaN, None）
+
+    Returns:
+        float 或 None
+    """
+    if value is None:
+        return None
+    if isinstance(value, float):
+        # 检查是否为 NaN
+        if math.isnan(value):
+            return None
+        return value
+    if isinstance(value, (int, str)):
+        try:
+            result = float(value)
+            return None if math.isnan(result) else result
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _safe_date(value: Any) -> Optional[date]:
+    """
+    安全地解析日期，处理多种格式和异常
+
+    Args:
+        value: 输入值（可能是 str, datetime, date, pd.Timestamp）
+
+    Returns:
+        date 对象或 None
+    """
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, pd.Timestamp):
+        return value.date()
+    if isinstance(value, str):
+        # 尝试多种日期格式
+        formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y%m%d',
+                   '%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S']
+        for fmt in formats:
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        logger.warning(f"无法解析日期字符串: {value}")
+        return None
+    return None
 
 
 # === 数据模型定义 ===
@@ -290,98 +351,117 @@ class DatabaseManager:
             return list(results)
     
     def save_daily_data(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         code: str,
         data_source: str = "Unknown"
     ) -> int:
         """
         保存日线数据到数据库
-        
+
         策略：
         - 使用 UPSERT 逻辑（存在则更新，不存在则插入）
-        - 跳过已存在的数据，避免重复
-        
+        - 批量查询已存在记录，减少数据库往返
+        - 批量操作提升性能
+
         Args:
             df: 包含日线数据的 DataFrame
             code: 股票代码
             data_source: 数据来源名称
-            
+
         Returns:
             新增/更新的记录数
         """
         if df is None or df.empty:
             logger.warning(f"保存数据为空，跳过 {code}")
             return 0
-        
-        saved_count = 0
-        
+
+        # 预处理：解析日期并收集所有日期（使用安全的日期解析）
+        row_dates = []
+        for _, row in df.iterrows():
+            row_date = _safe_date(row.get('date'))
+            if row_date is None:
+                logger.warning(f"跳过无效日期的行: {row.get('date')}")
+                continue
+            row_dates.append(row_date)
+
+        if not row_dates:
+            logger.warning(f"没有有效日期数据，跳过 {code}")
+            return 0
+
         with self.get_session() as session:
             try:
-                for _, row in df.iterrows():
-                    # 解析日期
-                    row_date = row.get('date')
-                    if isinstance(row_date, str):
-                        row_date = datetime.strptime(row_date, '%Y-%m-%d').date()
-                    elif isinstance(row_date, datetime):
-                        row_date = row_date.date()
-                    elif isinstance(row_date, pd.Timestamp):
-                        row_date = row_date.date()
-                    
-                    # 检查是否已存在
-                    existing = session.execute(
-                        select(StockDaily).where(
-                            and_(
-                                StockDaily.code == code,
-                                StockDaily.date == row_date
-                            )
+                # 批量查询已存在的记录
+                existing_records = session.execute(
+                    select(StockDaily).where(
+                        and_(
+                            StockDaily.code == code,
+                            StockDaily.date.in_(row_dates)
                         )
-                    ).scalar_one_or_none()
-                    
-                    if existing:
-                        # 更新现有记录
-                        existing.open = row.get('open')
-                        existing.high = row.get('high')
-                        existing.low = row.get('low')
-                        existing.close = row.get('close')
-                        existing.volume = row.get('volume')
-                        existing.amount = row.get('amount')
-                        existing.pct_chg = row.get('pct_chg')
-                        existing.ma5 = row.get('ma5')
-                        existing.ma10 = row.get('ma10')
-                        existing.ma20 = row.get('ma20')
-                        existing.volume_ratio = row.get('volume_ratio')
+                    )
+                ).scalars().all()
+
+                # 构建日期到记录的映射
+                existing_map = {r.date: r for r in existing_records}
+
+                # 收集需要新增和更新的记录
+                records_to_add = []
+                saved_count = 0
+
+                for idx, (_, row) in enumerate(df.iterrows()):
+                    row_date = _safe_date(row.get('date'))
+                    if row_date is None:
+                        continue
+
+                    if row_date in existing_map:
+                        # 更新现有记录（使用安全的 float 转换）
+                        existing = existing_map[row_date]
+                        existing.open = _safe_float(row.get('open'))
+                        existing.high = _safe_float(row.get('high'))
+                        existing.low = _safe_float(row.get('low'))
+                        existing.close = _safe_float(row.get('close'))
+                        existing.volume = _safe_float(row.get('volume'))
+                        existing.amount = _safe_float(row.get('amount'))
+                        existing.pct_chg = _safe_float(row.get('pct_chg'))
+                        existing.ma5 = _safe_float(row.get('ma5'))
+                        existing.ma10 = _safe_float(row.get('ma10'))
+                        existing.ma20 = _safe_float(row.get('ma20'))
+                        existing.volume_ratio = _safe_float(row.get('volume_ratio'))
                         existing.data_source = data_source
                         existing.updated_at = datetime.now()
                     else:
-                        # 创建新记录
+                        # 创建新记录（延迟添加，使用安全的 float 转换）
                         record = StockDaily(
                             code=code,
                             date=row_date,
-                            open=row.get('open'),
-                            high=row.get('high'),
-                            low=row.get('low'),
-                            close=row.get('close'),
-                            volume=row.get('volume'),
-                            amount=row.get('amount'),
-                            pct_chg=row.get('pct_chg'),
-                            ma5=row.get('ma5'),
-                            ma10=row.get('ma10'),
-                            ma20=row.get('ma20'),
-                            volume_ratio=row.get('volume_ratio'),
+                            open=_safe_float(row.get('open')),
+                            high=_safe_float(row.get('high')),
+                            low=_safe_float(row.get('low')),
+                            close=_safe_float(row.get('close')),
+                            volume=_safe_float(row.get('volume')),
+                            amount=_safe_float(row.get('amount')),
+                            pct_chg=_safe_float(row.get('pct_chg')),
+                            ma5=_safe_float(row.get('ma5')),
+                            ma10=_safe_float(row.get('ma10')),
+                            ma20=_safe_float(row.get('ma20')),
+                            volume_ratio=_safe_float(row.get('volume_ratio')),
                             data_source=data_source,
                         )
-                        session.add(record)
+                        records_to_add.append(record)
                         saved_count += 1
-                
+
+                # 批量添加新记录
+                if records_to_add:
+                    session.bulk_save_objects(records_to_add)
+
                 session.commit()
                 logger.info(f"保存 {code} 数据成功，新增 {saved_count} 条")
-                
+
             except Exception as e:
                 session.rollback()
                 logger.error(f"保存 {code} 数据失败: {e}")
                 raise
-        
+
         return saved_count
     
     def get_analysis_context(

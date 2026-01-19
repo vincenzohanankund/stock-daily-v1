@@ -34,6 +34,45 @@ from analyzer import AnalysisResult
 logger = logging.getLogger(__name__)
 
 
+def _mask_webhook_url(url: Optional[str]) -> str:
+    """
+    隐藏 Webhook URL 中的敏感 key
+
+    Args:
+        url: 原始 URL
+
+    Returns:
+        脱敏后的 URL
+    """
+    if not url:
+        return "None"
+    # 保留前缀，隐藏 key
+    match = re.match(r'(https?://[^/]+/[^/]+/)[^/]+', url)
+    if match:
+        return f"{match.group(1)}***MASKED***"
+    # 如果无法匹配，只显示前20个字符
+    return url[:20] + "***" if len(url) > 20 else url
+
+
+def _mask_sensitive_header(value: Optional[str], header_name: str) -> str:
+    """
+    隐藏敏感 HTTP 头信息
+
+    Args:
+        value: 原始值
+        header_name: 头名称
+
+    Returns:
+        脱敏后的值
+    """
+    if not value:
+        return "None"
+    # Bearer Token 等敏感头
+    if header_name.lower() in ('authorization', 'bearer'):
+        return f"Bearer ***MASKED*** ({len(value)} chars)"
+    return value
+
+
 class NotificationChannel(Enum):
     """通知渠道类型"""
     WECHAT = "wechat"      # 企业微信
@@ -1443,7 +1482,7 @@ class NotificationService:
     def _send_feishu_message(self, content: str) -> bool:
         """发送单条飞书消息（优先使用 Markdown 卡片）"""
         def _post_payload(payload: Dict[str, Any]) -> bool:
-            logger.debug(f"飞书请求 URL: {self._feishu_url}")
+            logger.debug(f"飞书请求 URL: {_mask_webhook_url(self._feishu_url)}")
             logger.debug(f"飞书请求 payload 长度: {len(content)} 字符")
 
             response = requests.post(
@@ -1453,7 +1492,9 @@ class NotificationService:
             )
 
             logger.debug(f"飞书响应状态码: {response.status_code}")
-            logger.debug(f"飞书响应内容: {response.text}")
+            # 响应内容可能包含敏感信息，截断显示
+            response_preview = response.text[:200] + "..." if len(response.text) > 200 else response.text
+            logger.debug(f"飞书响应内容: {response_preview}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -1633,6 +1674,7 @@ class NotificationService:
                 logger.warning(f"未知邮箱类型 {domain}，尝试通用配置: {smtp_server}:{smtp_port}")
             
             # 根据配置选择连接方式
+            server = None
             if use_ssl:
                 # SSL 连接（端口 465）
                 server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
@@ -1640,14 +1682,13 @@ class NotificationService:
                 # TLS 连接（端口 587）
                 server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
                 server.starttls()
-            
+
             server.login(sender, password)
             server.send_message(msg)
-            server.quit()
-            
+
             logger.info(f"邮件发送成功，收件人: {receivers}")
             return True
-            
+
         except smtplib.SMTPAuthenticationError:
             logger.error("邮件发送失败：认证错误，请检查邮箱和授权码是否正确")
             return False
@@ -1657,6 +1698,13 @@ class NotificationService:
         except Exception as e:
             logger.error(f"发送邮件失败: {e}")
             return False
+        finally:
+            # 确保 SMTP 连接总是被关闭
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    pass  # 忽略 quit() 时的异常
     
     def _markdown_to_html(self, markdown_text: str) -> str:
         """

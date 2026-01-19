@@ -1105,25 +1105,31 @@ class SearchService:
 
 # === 便捷函数 ===
 _search_service: Optional[SearchService] = None
+import threading
+_service_lock = threading.Lock()  # module 级别直接初始化锁，避免竞态条件
 
 
 def get_search_service() -> SearchService:
-    """获取搜索服务单例"""
+    """获取搜索服务单例（线程安全，使用双重检查锁定）"""
     global _search_service
 
+    # 快速路径（无锁）
     if _search_service is None:
-        from config import get_config
-        config = get_config()
+        # 双重检查锁定
+        with _service_lock:
+            if _search_service is None:
+                from config import get_config
+                config = get_config()
 
-        _search_service = SearchService(
-            bocha_keys=config.bocha_api_keys,
-            tavily_keys=config.tavily_api_keys,
-            serpapi_keys=config.serpapi_keys,
-            searxng_url=config.searxng_url,
-            searxng_engines=config.searxng_engines,
-            searxng_language=config.searxng_language,
-            searxng_time_range=config.searxng_time_range,
-        )
+                _search_service = SearchService(
+                    bocha_keys=config.bocha_api_keys,
+                    tavily_keys=config.tavily_api_keys,
+                    serpapi_keys=config.serpapi_keys,
+                    searxng_url=config.searxng_url,
+                    searxng_engines=config.searxng_engines,
+                    searxng_language=config.searxng_language,
+                    searxng_time_range=config.searxng_time_range,
+                )
 
     return _search_service
 

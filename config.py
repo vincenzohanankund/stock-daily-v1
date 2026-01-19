@@ -11,6 +11,7 @@ A股自选股智能分析系统 - 配置管理模块
 """
 
 import os
+import threading
 from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv, dotenv_values
@@ -132,19 +133,24 @@ class Config:
     
     # 单例实例存储
     _instance: Optional['Config'] = None
-    
+    _lock = threading.Lock()
+
     @classmethod
     def get_instance(cls) -> 'Config':
         """
-        获取配置单例实例
-        
+        获取配置单例实例（线程安全，使用双重检查锁定）
+
         单例模式确保：
         1. 全局只有一个配置实例
         2. 配置只从环境变量加载一次
         3. 所有模块共享相同配置
         """
+        # 快速路径（无锁）
         if cls._instance is None:
-            cls._instance = cls._load_from_env()
+            # 双重检查锁定
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls._load_from_env()
         return cls._instance
     
     @classmethod

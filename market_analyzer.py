@@ -133,7 +133,18 @@ class MarketAnalyzer:
         
         return overview
 
-    def _call_akshare_with_retry(self, fn, name: str, attempts: int = 2):
+    def _call_akshare_with_retry(self, fn, name: str, attempts: int = 2) -> Optional[pd.DataFrame]:
+        """
+        带重试的 Akshare 调用
+
+        Args:
+            fn: 要调用的函数
+            name: 操作名称（用于日志）
+            attempts: 重试次数
+
+        Returns:
+            pandas.DataFrame 或 None（失败时）
+        """
         last_error: Optional[Exception] = None
         for attempt in range(1, attempts + 1):
             try:

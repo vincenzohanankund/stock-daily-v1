@@ -18,6 +18,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+from filelock import FileLock, Timeout
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +36,18 @@ _STOCK_LIST_RE = re.compile(
 class ConfigService:
     """
     配置管理服务
-    
+
     负责 .env 文件中 STOCK_LIST 的读写操作
+    使用文件锁保护并发写入
     """
-    
+
+    # 类级别的锁文件路径
+    _lock_file = ".env.lock"
+
     def __init__(self, env_path: Optional[str] = None):
         self.env_path = env_path or _ENV_PATH
+        # 创建文件锁实例（超时5秒）
+        self._lock = FileLock(self._lock_file, timeout=5)
     
     def read_env_text(self) -> str:
         """读取 .env 文件内容"""
@@ -62,19 +69,27 @@ class ConfigService:
     
     def set_stock_list(self, stock_list: str) -> str:
         """
-        设置自选股列表
-        
+        设置自选股列表（使用文件锁保护并发写入）
+
         Args:
             stock_list: 股票代码字符串（逗号或换行分隔）
-            
+
         Returns:
             规范化后的股票列表字符串
+
+        Raises:
+            RuntimeError: 文件锁获取超时时抛出
         """
-        env_text = self.read_env_text()
-        normalized = self._normalize_stock_list(stock_list)
-        updated = self._update_stock_list(env_text, normalized)
-        self.write_env_text(updated)
-        return normalized
+        try:
+            with self._lock:
+                env_text = self.read_env_text()
+                normalized = self._normalize_stock_list(stock_list)
+                updated = self._update_stock_list(env_text, normalized)
+                self.write_env_text(updated)
+                return normalized
+        except Timeout:
+            logger.error(f"获取文件锁超时，可能有其他进程正在写入 .env 文件")
+            raise RuntimeError(f"无法获取文件锁超时({self._lock.timeout}秒)，请稍后重试")
     
     def get_env_filename(self) -> str:
         """获取 .env 文件名"""
