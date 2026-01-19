@@ -530,6 +530,204 @@ class BochaSearchProvider(BaseSearchProvider):
             return '未知来源'
 
 
+class SearXNGSearchProvider(BaseSearchProvider):
+    """
+    SearXNG 搜索引擎（免费聚合搜索，无 API Key 要求）
+
+    特点：
+    - 完全免费，无需 API Key
+    - 聚合多个搜索引擎（Google、Bing、百度等）
+    - 开源项目，可自部署
+    - 适合作为 Tavily/SerpAPI 不可用时的后备方案
+
+    文档：https://docs.searxng.org/
+    """
+
+    # 默认 SearXNG 实例
+    DEFAULT_URL = "http://search.maolige.com:8888/"
+
+    def __init__(self, api_keys: Optional[List[str]] = None, base_url: Optional[str] = None):
+        """
+        初始化 SearXNG 搜索引擎
+
+        Args:
+            api_keys: 保留参数（SearXNG 不需要 API Key，但保持接口兼容）
+            base_url: SearXNG 实例 URL（可选，默认使用公开实例）
+        """
+        # 传递空的 keys 列表以保持接口兼容
+        super().__init__(api_keys or [], "SearXNG")
+        self._base_url = base_url or self.DEFAULT_URL
+
+    @property
+    def is_available(self) -> bool:
+        """SearXNG 始终可用（无需 API Key）"""
+        return True
+
+    def _get_next_key(self) -> Optional[str]:
+        """SearXNG 不需要 API Key，返回占位符"""
+        return "searxng_no_key"
+
+    def _do_search(self, query: str, api_key: str, max_results: int) -> SearchResponse:
+        """执行 SearXNG 搜索"""
+        try:
+            import requests
+        except ImportError:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message="requests 未安装，请运行: pip install requests"
+            )
+
+        try:
+            # SearXNG API 参数
+            url = self._base_url + "search"
+            params = {
+                "q": query,
+                "format": "json",
+                "engines": "google,bing,baidu",  # 使用多个搜索引擎
+                "language": "zh-CN",
+                "time_range": "",  # 不限制时间范围
+                "pageno": 1,  # 第一页（从 1 开始，不是 0）
+            }
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+
+            logger.debug(f"[SearXNG] 请求 URL: {url}")
+            logger.debug(f"[SearXNG] 查询参数: {params}")
+
+            # 执行搜索
+            response = requests.get(url, params=params, headers=headers, timeout=15)
+
+            # 检查 HTTP 状态码
+            if response.status_code != 200:
+                error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                logger.warning(f"[SearXNG] {error_msg}")
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            # 解析 JSON 响应
+            try:
+                data = response.json()
+            except ValueError as e:
+                error_msg = f"响应 JSON 解析失败: {str(e)}"
+                logger.error(f"[SearXNG] {error_msg}")
+                logger.debug(f"[SearXNG] 响应内容: {response.text[:500]}")
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            logger.debug(f"[SearXNG] 原始响应 keys: {data.keys()}")
+
+            # 解析搜索结果
+            results = []
+            answers = data.get('answers', [])
+            organic_results = data.get('results', [])
+
+            # 添加 answers（如果有的话）
+            for answer in answers[:max_results]:
+                results.append(SearchResult(
+                    title=f"💡 答案: {answer[:100]}...",
+                    snippet=answer[:500],
+                    url=self._base_url,
+                    source="SearXNG聚合",
+                    published_date=None,
+                ))
+
+            # 添加搜索结果
+            for item in organic_results[:max_results]:
+                # SearXNG 结果格式
+                title = item.get('title', '')
+                url = item.get('url', '')
+                snippet = item.get('content', '')
+                engine = item.get('engine', '未知')
+                score = item.get('score', 0)
+
+                # 提取域名作为来源
+                source = self._extract_domain(url)
+
+                results.append(SearchResult(
+                    title=title,
+                    snippet=snippet[:500] if snippet else '',
+                    url=url,
+                    source=f"{source} ({engine})",
+                    published_date=None,
+                ))
+
+            logger.info(f"[SearXNG] 搜索完成，query='{query}'，返回 {len(results)} 条结果")
+
+            return SearchResponse(
+                query=query,
+                results=results,
+                provider=self.name,
+                success=True,
+            )
+
+        except requests.exceptions.Timeout:
+            error_msg = "请求超时（15秒）"
+            logger.error(f"[SearXNG] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"连接失败: {str(e)}"
+            logger.error(f"[SearXNG] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络请求失败: {str(e)}"
+            logger.error(f"[SearXNG] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except Exception as e:
+            error_msg = f"未知错误: {str(e)}"
+            logger.error(f"[SearXNG] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        """从 URL 提取域名作为来源"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace('www.', '')
+            return domain or '未知来源'
+        except:
+            return '未知来源'
+
+
 class SearchService:
     """
     搜索服务
@@ -545,35 +743,43 @@ class SearchService:
         bocha_keys: Optional[List[str]] = None,
         tavily_keys: Optional[List[str]] = None,
         serpapi_keys: Optional[List[str]] = None,
+        searxng_url: Optional[str] = None,
     ):
         """
         初始化搜索服务
-        
+
         Args:
             bocha_keys: 博查搜索 API Key 列表
             tavily_keys: Tavily API Key 列表
             serpapi_keys: SerpAPI Key 列表
+            searxng_url: SearXNG 实例 URL（可选，默认使用内置的公开实例）
         """
         self._providers: List[BaseSearchProvider] = []
-        
+
         # 初始化搜索引擎（按优先级排序）
         # 1. Bocha 优先（中文搜索优化，AI摘要）
         if bocha_keys:
             self._providers.append(BochaSearchProvider(bocha_keys))
             logger.info(f"已配置 Bocha 搜索，共 {len(bocha_keys)} 个 API Key")
-        
+
         # 2. Tavily（免费额度更多，每月 1000 次）
         if tavily_keys:
             self._providers.append(TavilySearchProvider(tavily_keys))
             logger.info(f"已配置 Tavily 搜索，共 {len(tavily_keys)} 个 API Key")
-        
+
         # 3. SerpAPI 作为备选（每月 100 次）
         if serpapi_keys:
             self._providers.append(SerpAPISearchProvider(serpapi_keys))
             logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
-        
+
+        # 4. SearXNG 作为最后的后备选项（免费，无需 API Key）
+        # 只有在没有配置任何其他搜索引擎时才自动启用
         if not self._providers:
-            logger.warning("未配置任何搜索引擎 API Key，新闻搜索功能将不可用")
+            self._providers.append(SearXNGSearchProvider(base_url=searxng_url))
+            if searxng_url:
+                logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（自定义实例: {searxng_url}）")
+            else:
+                logger.info("未配置其他搜索引擎，启用 SearXNG 免费搜索作为后备（使用默认实例）")
     
     @property
     def is_available(self) -> bool:
@@ -857,6 +1063,7 @@ def get_search_service() -> SearchService:
             bocha_keys=config.bocha_api_keys,
             tavily_keys=config.tavily_api_keys,
             serpapi_keys=config.serpapi_keys,
+            searxng_url=config.searxng_url,
         )
     
     return _search_service
