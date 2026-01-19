@@ -13,9 +13,9 @@ A股自选股智能分析系统 - AI分析层
 import json
 import logging
 import time
+import threading
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
-
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -409,7 +409,10 @@ class GeminiAnalyzer:
         # 旧版 SDK 相关属性
         self._legacy_genai = None  # 旧版 google.generativeai 模块
         self._legacy_model = None  # 旧版模型实例
-        
+
+        # 线程安全：初始化锁（防止并发初始化 OpenAI 客户端）
+        self._init_lock = threading.Lock()
+
         # 检查 Gemini API Key 是否有效（过滤占位符）
         gemini_key_valid = self._api_key and not self._api_key.startswith('your_') and len(self._api_key) > 10
         
@@ -431,56 +434,68 @@ class GeminiAnalyzer:
     
     def _init_openai_fallback(self) -> None:
         """
-        初始化 OpenAI 兼容 API 作为备选
-        
+        初始化 OpenAI 兼容 API 作为备选（线程安全）
+
         支持所有 OpenAI 格式的 API，包括：
         - OpenAI 官方
         - DeepSeek
         - 通义千问
         - Moonshot 等
+
+        线程安全：使用锁防止重复初始化
         """
-        config = get_config()
-        
-        # 检查 OpenAI API Key 是否有效（过滤占位符）
-        openai_key_valid = (
-            config.openai_api_key and 
-            not config.openai_api_key.startswith('your_') and 
-            len(config.openai_api_key) > 10
-        )
-        
-        if not openai_key_valid:
-            logger.debug("OpenAI 兼容 API 未配置或配置无效")
+        # 快速检查：如果已经初始化，直接返回
+        if self._openai_client is not None:
             return
-        
-        # 分离 import 和客户端创建，以便提供更准确的错误信息
-        try:
-            from openai import OpenAI
-        except ImportError:
-            logger.error("未安装 openai 库，请运行: pip install openai")
-            return
-        
-        try:
-            # base_url 可选，不填则使用 OpenAI 官方默认地址
-            client_kwargs = {"api_key": config.openai_api_key}
-            if config.openai_base_url and config.openai_base_url.startswith('http'):
-                client_kwargs["base_url"] = config.openai_base_url
-            
-            self._openai_client = OpenAI(**client_kwargs)
-            self._current_model_name = config.openai_model
-            self._use_openai = True
-            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model})")
-        except ImportError as e:
-            # 依赖缺失（如 socksio）
-            if 'socksio' in str(e).lower() or 'socks' in str(e).lower():
-                logger.error(f"OpenAI 客户端需要 SOCKS 代理支持，请运行: pip install httpx[socks] 或 pip install socksio")
-            else:
-                logger.error(f"OpenAI 依赖缺失: {e}")
-        except Exception as e:
-            error_msg = str(e).lower()
-            if 'socks' in error_msg or 'socksio' in error_msg or 'proxy' in error_msg:
-                logger.error(f"OpenAI 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
-            else:
-                logger.error(f"OpenAI 兼容 API 初始化失败: {e}")
+
+        # 使用锁确保线程安全
+        with self._init_lock:
+            # 双重检查：另一个线程可能已经初始化了
+            if self._openai_client is not None:
+                return
+
+            config = get_config()
+
+            # 检查 OpenAI API Key 是否有效（过滤占位符）
+            openai_key_valid = (
+                config.openai_api_key and
+                not config.openai_api_key.startswith('your_') and
+                len(config.openai_api_key) > 10
+            )
+
+            if not openai_key_valid:
+                logger.debug("OpenAI 兼容 API 未配置或配置无效")
+                return
+
+            # 分离 import 和客户端创建，以便提供更准确的错误信息
+            try:
+                from openai import OpenAI
+            except ImportError:
+                logger.error("未安装 openai 库，请运行: pip install openai")
+                return
+
+            try:
+                # base_url 可选，不填则使用 OpenAI 官方默认地址
+                client_kwargs = {"api_key": config.openai_api_key}
+                if config.openai_base_url and config.openai_base_url.startswith('http'):
+                    client_kwargs["base_url"] = config.openai_base_url
+
+                self._openai_client = OpenAI(**client_kwargs)
+                self._current_model_name = config.openai_model
+                self._use_openai = True
+                logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model})")
+            except ImportError as e:
+                # 依赖缺失（如 socksio）
+                if 'socksio' in str(e).lower() or 'socks' in str(e).lower():
+                    logger.error(f"OpenAI 客户端需要 SOCKS 代理支持，请运行: pip install httpx[socks] 或 pip install socksio")
+                else:
+                    logger.error(f"OpenAI 依赖缺失: {e}")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'socks' in error_msg or 'socksio' in error_msg or 'proxy' in error_msg:
+                    logger.error(f"OpenAI 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
+                else:
+                    logger.error(f"OpenAI 兼容 API 初始化失败: {e}")
     
     def _init_model(self) -> None:
         """
@@ -579,11 +594,18 @@ class GeminiAnalyzer:
             import os
 
             # 确保代理环境变量设置正确（旧版 SDK 使用大写环境变量）
-            # 如果用户设置了小写变量，同步到对应的变量
+            # 注意：直接修改 os.environ 在多线程环境下不安全，仅在主线程初始化时使用
             if not os.getenv("HTTP_PROXY") and os.getenv("http_proxy"):
                 os.environ["HTTP_PROXY"] = os.getenv("http_proxy")
             if not os.getenv("HTTPS_PROXY") and os.getenv("https_proxy"):
                 os.environ["HTTPS_PROXY"] = os.getenv("https_proxy")
+
+            # 记录警告：多线程环境下可能有问题
+            if threading.active_count() > 1:
+                logger.warning(
+                    "[旧版 SDK] 在多线程环境下修改环境变量可能导致竞态条件。"
+                    "建议：在启动程序前设置环境变量，或使用新版 google-genai SDK。"
+                )
 
             # 配置 API Key
             genai.configure(api_key=self._api_key)
@@ -1422,6 +1444,28 @@ class GeminiAnalyzer:
         当对象被垃圾回收时自动调用 close()
         """
         self.close()
+
+    def __enter__(self):
+        """
+        上下文管理器入口
+
+        支持 with 语句，确保资源正确释放
+
+        Example:
+            with GeminiAnalyzer() as analyzer:
+                result = analyzer.analyze(context)
+            # 自动调用 close()
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        上下文管理器出口
+
+        自动调用 close() 释放资源
+        """
+        self.close()
+        return False  # 不抑制异常
 
 
 # 便捷函数
