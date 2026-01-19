@@ -498,14 +498,13 @@ button:active {
 /* Task detail expand */
 .task-detail {
     display: none;
-    padding: 0.5rem 0.75rem;
-    padding-left: 3rem;
+    padding: 0.75rem;
+    padding-left: 1rem;
     background: rgba(0,0,0,0.02);
     border-radius: 0 0 0.5rem 0.5rem;
-    margin-top: -0.5rem;
-    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
     border: 1px solid var(--border);
-    border-top: none;
 }
 
 .task-detail.show {
@@ -687,13 +686,13 @@ def render_config_page(
         const status = task.status || 'pending';
         const code = task.code || taskId.split('_')[0];
         const result = task.result || {};
-        
+
         let statusIcon = '⏳';
         let statusText = '等待中';
         if (status === 'running') { statusIcon = '<span class="spinner"></span>'; statusText = '分析中'; }
         else if (status === 'completed') { statusIcon = '✓'; statusText = '完成'; }
         else if (status === 'failed') { statusIcon = '✗'; statusText = '失败'; }
-        
+
         let resultHtml = '';
         if (status === 'completed' && result.operation_advice) {
             const adviceClass = getAdviceClass(result.operation_advice);
@@ -704,21 +703,26 @@ def render_config_page(
         } else if (status === 'failed') {
             resultHtml = '<div class="task-result"><span class="task-advice sell">失败</span></div>';
         }
-        
+
         let detailHtml = '';
+        let expandHint = '';
         if (status === 'completed' && result.name) {
+            // 显示完整分析摘要（不截断）
             detailHtml = '<div class="task-detail" id="detail_' + taskId + '">' +
-                '<div class="task-detail-row"><span class="label">趋势</span><span>' + (result.trend_prediction || '-') + '</span></div>' +
-                (result.analysis_summary ? '<div class="task-detail-summary">' + result.analysis_summary.substring(0, 100) + '...</div>' : '') +
+                '<div class="task-detail-row"><span class="label">趋势预测</span><span style="font-weight:600">' + (result.trend_prediction || '-') + '</span></div>' +
+                '<div class="task-detail-row"><span class="label">情绪评分</span><span>' + (result.sentiment_score || '-') + '分</span></div>' +
+                (result.analysis_summary ? '<div class="task-detail-summary"><strong style="display:block;margin-bottom:0.3rem;color:var(--text)">分析摘要</strong>' + result.analysis_summary + '</div>' : '') +
                 '</div>';
+            expandHint = '<span style="font-size:0.65rem;color:var(--text-light);margin-left:auto">▼ 点击展开</span>';
         }
-        
+
         return '<div class="task-card ' + status + '" id="task_' + taskId + '" onclick="toggleDetail(\\''+taskId+'\\')">' +
             '<div class="task-status">' + statusIcon + '</div>' +
             '<div class="task-main">' +
                 '<div class="task-title">' +
                     '<span class="code">' + code + '</span>' +
                     (result.name ? '<span class="name">' + result.name + '</span>' : '') +
+                    expandHint +
                 '</div>' +
                 '<div class="task-meta">' +
                     '<span>⏱ ' + formatTime(task.start_time) + '</span>' +
