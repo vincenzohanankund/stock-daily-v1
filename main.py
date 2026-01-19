@@ -159,6 +159,10 @@ class StockAnalysisPipeline:
             bocha_keys=self.config.bocha_api_keys,
             tavily_keys=self.config.tavily_api_keys,
             serpapi_keys=self.config.serpapi_keys,
+            searxng_url=self.config.searxng_url,
+            searxng_engines=self.config.searxng_engines,
+            searxng_language=self.config.searxng_language,
+            searxng_time_range=self.config.searxng_time_range,
         )
         
         logger.info(f"调度器初始化完成，最大并发数: {self.max_workers}")
@@ -943,11 +947,15 @@ def main() -> int:
             search_service = None
             analyzer = None
             
-            if config.bocha_api_keys or config.tavily_api_keys or config.serpapi_keys:
+            if config.bocha_api_keys or config.tavily_api_keys or config.serpapi_keys or config.searxng_url:
                 search_service = SearchService(
                     bocha_keys=config.bocha_api_keys,
                     tavily_keys=config.tavily_api_keys,
-                    serpapi_keys=config.serpapi_keys
+                    serpapi_keys=config.serpapi_keys,
+                    searxng_url=config.searxng_url,
+                    searxng_engines=config.searxng_engines,
+                    searxng_language=config.searxng_language,
+                    searxng_time_range=config.searxng_time_range,
                 )
             
             if config.gemini_api_key:
