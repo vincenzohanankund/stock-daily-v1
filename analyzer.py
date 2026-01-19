@@ -503,12 +503,31 @@ class GeminiAnalyzer:
         try:
             from google import genai
             from google.genai import types
+            import os
+
+            # 准备 http_options，支持代理设置
+            http_opts = {"timeout": 120}
+
+            # 读取代理设置（支持小写和大写环境变量）
+            proxy_url = (
+                os.getenv("HTTPS_PROXY") or
+                os.getenv("https_proxy") or
+                os.getenv("HTTP_PROXY") or
+                os.getenv("http_proxy")
+            )
+
+            if proxy_url:
+                # 通过 clientArgs 传递代理设置给 httpx.Client
+                http_opts["clientArgs"] = {"proxy": proxy_url, "trust_env": True}
+                logger.info(f"检测到代理设置: {proxy_url}")
+            else:
+                # 没有代理时也设置 trust_env=True，以便 httpx 尝试自动检测代理
+                http_opts["clientArgs"] = {"trust_env": True}
 
             # 创建客户端（新 SDK 方式）
-            # 设置 120 秒超时，与旧版 SDK 的 request_options={"timeout": 120} 保持一致
             self._genai_client = genai.Client(
                 api_key=self._api_key,
-                http_options={"timeout": 120}
+                http_options=http_opts
             )
             self._genai_types = types
 
@@ -543,6 +562,14 @@ class GeminiAnalyzer:
         """
         try:
             import google.generativeai as genai
+            import os
+
+            # 确保代理环境变量设置正确（旧版 SDK 使用大写环境变量）
+            # 如果用户设置了小写变量，同步到对应的变量
+            if not os.getenv("HTTP_PROXY") and os.getenv("http_proxy"):
+                os.environ["HTTP_PROXY"] = os.getenv("http_proxy")
+            if not os.getenv("HTTPS_PROXY") and os.getenv("https_proxy"):
+                os.environ["HTTPS_PROXY"] = os.getenv("https_proxy")
 
             # 配置 API Key
             genai.configure(api_key=self._api_key)
