@@ -404,6 +404,7 @@ class GeminiAnalyzer:
         self._genai_types = None  # 新版 SDK types 模块
         self._fallback_model_name = None  # 备选模型名称
         self._use_legacy_sdk = False  # 是否使用旧版 SDK
+        self._httpx_client = None  # 自定义 httpx.Client（需要手动关闭）
 
         # 旧版 SDK 相关属性
         self._legacy_genai = None  # 旧版 google.generativeai 模块
@@ -516,14 +517,14 @@ class GeminiAnalyzer:
 
             # 创建自定义 httpx.Client（支持代理）
             if proxy_url:
-                http_client = httpx.Client(
+                self._httpx_client = httpx.Client(
                     proxy=proxy_url,
                     timeout=120,
                     trust_env=True  # 同时也信任环境变量
                 )
                 logger.info(f"检测到代理设置: {proxy_url}")
             else:
-                http_client = httpx.Client(
+                self._httpx_client = httpx.Client(
                     timeout=120,
                     trust_env=True  # 自动检测环境变量中的代理
                 )
@@ -532,7 +533,7 @@ class GeminiAnalyzer:
             # 使用 httpxClient 参数直接传入自定义的 httpx.Client
             self._genai_client = genai.Client(
                 api_key=self._api_key,
-                http_options={"httpxClient": http_client}
+                http_options={"httpxClient": self._httpx_client}
             )
             self._genai_types = types
 
@@ -549,10 +550,18 @@ class GeminiAnalyzer:
         except ImportError:
             # 新 SDK 未安装，尝试回退到旧 SDK
             logger.warning("google-genai SDK 未安装，尝试使用旧版 google.generativeai")
+            # 清理已创建的 httpx_client
+            if self._httpx_client:
+                self._httpx_client.close()
+                self._httpx_client = None
             self._init_model_legacy(model_name, fallback_model)
         except Exception as e:
             # 新 SDK 初始化失败，尝试回退到旧 SDK
             logger.warning(f"google-genai SDK 初始化失败: {e}，尝试使用旧版 google.generativeai")
+            # 清理已创建的 httpx_client
+            if self._httpx_client:
+                self._httpx_client.close()
+                self._httpx_client = None
             self._init_model_legacy(model_name, fallback_model)
 
     def _init_model_legacy(self, model_name: str, fallback_model: str) -> None:
@@ -1349,6 +1358,37 @@ class GeminiAnalyzer:
             results.append(result)
         
         return results
+
+    def close(self) -> None:
+        """
+        关闭分析器，释放资源
+
+        关闭自定义的 httpx.Client，避免 ResourceWarning
+        """
+        if self._httpx_client is not None:
+            try:
+                self._httpx_client.close()
+                logger.debug("已关闭 httpx.Client")
+            except Exception as e:
+                logger.warning(f"关闭 httpx.Client 时出错: {e}")
+            finally:
+                self._httpx_client = None
+
+        # 也关闭 OpenAI 客户端
+        if self._openai_client is not None:
+            try:
+                self._openai_client.close()
+                logger.debug("已关闭 OpenAI 客户端")
+            except Exception as e:
+                logger.warning(f"关闭 OpenAI 客户端时出错: {e}")
+
+    def __del__(self) -> None:
+        """
+        析构函数，确保资源被释放
+
+        当对象被垃圾回收时自动调用 close()
+        """
+        self.close()
 
 
 # 便捷函数

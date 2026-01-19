@@ -876,7 +876,15 @@ def run_full_analysis(
 
         except Exception as e:
             logger.error(f"飞书文档生成失败: {e}")
-        
+
+        # 清理资源：关闭 analyzer 的 HTTP 连接
+        finally:
+            try:
+                if hasattr(pipeline, 'analyzer') and pipeline.analyzer:
+                    pipeline.analyzer.close()
+            except Exception as e:
+                logger.warning(f"关闭 analyzer 时出错: {e}")
+
     except Exception as e:
         logger.exception(f"分析流程执行失败: {e}")
 
@@ -942,11 +950,11 @@ def main() -> int:
         if args.market_review:
             logger.info("模式: 仅大盘复盘")
             notifier = NotificationService()
-            
+
             # 初始化搜索服务和分析器（如果有配置）
             search_service = None
             analyzer = None
-            
+
             if config.bocha_api_keys or config.tavily_api_keys or config.serpapi_keys or config.searxng_url:
                 search_service = SearchService(
                     bocha_keys=config.bocha_api_keys,
@@ -957,11 +965,16 @@ def main() -> int:
                     searxng_language=config.searxng_language,
                     searxng_time_range=config.searxng_time_range,
                 )
-            
+
             if config.gemini_api_key:
                 analyzer = GeminiAnalyzer(api_key=config.gemini_api_key)
-            
-            run_market_review(notifier, analyzer, search_service)
+
+            try:
+                run_market_review(notifier, analyzer, search_service)
+            finally:
+                # 清理资源
+                if analyzer:
+                    analyzer.close()
             return 0
         
         # 模式2: 定时任务模式
