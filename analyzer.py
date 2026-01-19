@@ -576,7 +576,11 @@ class GeminiAnalyzer:
 
         except Exception as e:
             logger.error(f"Gemini 旧版 SDK 模型初始化失败: {e}")
+            # 清理所有旧版 SDK 相关属性，确保状态一致性
             self._model = None
+            self._legacy_genai = None
+            self._legacy_model = None
+            self._use_legacy_sdk = False
     
     def _switch_to_fallback_model(self) -> bool:
         """

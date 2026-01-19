@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from itertools import cycle
+from urllib.parse import urlparse
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +255,6 @@ class TavilySearchProvider(BaseSearchProvider):
     def _extract_domain(url: str) -> str:
         """从 URL 提取域名作为来源"""
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
             return domain or '未知来源'
@@ -362,17 +363,7 @@ class BochaSearchProvider(BaseSearchProvider):
     
     def _do_search(self, query: str, api_key: str, max_results: int) -> SearchResponse:
         """执行博查搜索"""
-        try:
-            import requests
-        except ImportError:
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message="requests 未安装，请运行: pip install requests"
-            )
-        
+        # requests 已在文件顶部导入
         try:
             # API 端点
             url = "https://api.bocha.cn/v1/web-search"
@@ -522,7 +513,6 @@ class BochaSearchProvider(BaseSearchProvider):
     def _extract_domain(url: str) -> str:
         """从 URL 提取域名作为来源"""
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
             return domain or '未知来源'
@@ -617,17 +607,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
 
     def _do_search(self, query: str, api_key: str, max_results: int) -> SearchResponse:
         """执行 SearXNG 搜索"""
-        try:
-            import requests
-        except ImportError:
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message="requests 未安装，请运行: pip install requests"
-            )
-
+        # requests 已在文件顶部导入
         try:
             # SearXNG API 参数
             url = self._base_url + "search"
@@ -775,7 +755,6 @@ class SearXNGSearchProvider(BaseSearchProvider):
     def _extract_domain(url: str) -> str:
         """从 URL 提取域名作为来源"""
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
             return domain or '未知来源'

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git restore:*)",
+      "Bash(git add:*)",
+      "Bash(python:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git remote add:*)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" status)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" branch --show-current)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" checkout main)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" checkout -b feat/fix-webui-task-detail-display)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" add web/templates.py)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" commit -m \"$\\(cat <<''EOF''\nfix\\(webui\\): 改善任务详情显示，展示完整分析摘要\n\n## 问题描述\n\nWebUI 任务卡片只显示 operation_advice（操作建议），\n而 trend_prediction（趋势预测）和 analysis_summary（分析摘要）\n被隐藏在可展开的详情区域中，且：\n\n1. 没有明显的视觉提示告知用户可以点击展开\n2. analysis_summary 被截断到 100 字符\n3. 详情区域的样式不够清晰\n\n## 修改内容\n\n### web/templates.py\n\n**CSS 样式调整：**\n- 增加详情区域的内边距和字体大小\n- 移除过大的左缩进限制\n\n**JavaScript 渲染优化：**\n- 添加 \"▼ 点击展开\" 视觉提示\n- 显示完整的 analysis_summary（移除 100 字符截断）\n- 优化详情区域布局：\n  * 趋势预测（加粗显示）\n  * 情绪评分（单独一行）\n  * 分析摘要（完整内容，带小标题）\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" push myfork feat/fix-webui-task-detail-display)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" log --oneline -3)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" checkout feat/add-searxng-search-provider)",
+      "Bash(git -C \"D:\\\\python\\\\daily_stock_analysis\" log --oneline -10 --all --graph)",
+      "Bash(git -C:*)",
+      "Bash(gh pr create --repo ZhuLinsen/daily_stock_analysis --base main --head handsomejustin:daily_stock_analysis:main --title \"feat: 多项功能更新及代码审查修复\" --body \"$\\(cat <<''EOF''\n## 概述\n\n本次 PR 包含多项功能更新和代码审查反馈修复：\n\n1. **新版 google-genai SDK 迁移** - 使用官方新版 SDK，保留旧版后备兼容\n2. **SearXNG 免费搜索引擎** - 添加作为后备搜索选项（需自部署）\n3. **WebUI 任务详情显示修复** - 显示完整分析摘要，优化交互体验\n4. **代码审查反馈修复** - 解决 DEFAULT_URL 安全问题和 max_results 逻辑问题\n\n---\n\n## 主要变更\n\n### 1. google-genai SDK 迁移\n\n**文件：** `analyzer.py`, `requirements.txt`\n\n- ✅ 使用新版 `from google import genai` SDK\n- ✅ 保留旧版 `google.generativeai` 作为后备兼容\n- ✅ 自动降级机制，确保平滑迁移\n\n### 2. SearXNG 搜索引擎\n\n**文件：** `search_service.py`, `config.py`\n\n**功能：**\n- 添加 SearXNG 作为免费后备搜索引擎\n- 无需 API Key，聚合多个搜索源\n- 只在未配置其他搜索引擎时启用\n\n**安全改进（代码审查反馈）：**\n- ⚠️ 移除默认公共实例 URL（隐私风险）\n- 🔒 要求用户必须配置 SEARXNG_URL\n- 📖 文档说明自部署方法和安全风险\n\n**修复：**\n- 修正 max_results 逻辑，确保结果总数不超过限制\n\n### 3. WebUI 详情显示修复\n\n**文件：** `web/templates.py`\n\n- 添加 \"▼ 点击展开\" 视觉提示\n- 显示完整的 analysis_summary（移除 100 字符截断）\n- 优化详情区域布局和样式\n\n### 4. 新增 CLAUDE.md\n\n- 项目架构文档\n- 开发命令指南\n- 模块交互说明\n\n---\n\n## 测试\n\n- [x] Python 语法验证通过\n- [x] SDK 兼容性测试（新版优先，旧版后备）\n- [x] SearXNG 搜索功能测试\n- [x] WebUI 界面显示测试\n\n---\n\n## 配置说明\n\n如需使用 SearXNG 免费搜索，请在 .env 中添加：\n\n```bash\n# SearXNG 实例 URL（自部署或公共实例）\nSEARXNG_URL=https://your-searxng-instance.com/\n```\n\n**安全提示：** 建议使用自部署实例以保护隐私。\n\n---\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(cd:*)"
+    ]
+  }
+}
