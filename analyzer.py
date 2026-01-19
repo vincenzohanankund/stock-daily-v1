@@ -488,13 +488,18 @@ class GeminiAnalyzer:
         配置：
         - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
         - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
+        - 设置 120 秒请求超时（与旧版 SDK 保持一致）
         """
         try:
             from google import genai
             from google.genai import types
 
             # 创建客户端（新 SDK 方式）
-            self._genai_client = genai.Client(api_key=self._api_key)
+            # 设置 120 秒超时，与旧版 SDK 的 request_options={"timeout": 120} 保持一致
+            self._genai_client = genai.Client(
+                api_key=self._api_key,
+                http_options={"timeout": 120}  # 新版 SDK 使用 http_options 设置超时
+            )
             self._genai_types = types
 
             # 从配置获取模型名称
@@ -510,7 +515,7 @@ class GeminiAnalyzer:
             self._current_model_name = model_name
             self._using_fallback = False
             self._fallback_model_name = fallback_model
-            logger.info(f"Gemini 客户端初始化成功 (模型: {model_name})")
+            logger.info(f"Gemini 客户端初始化成功 (模型: {model_name}, 超时: 120s)")
 
         except ImportError as e:
             # 新 SDK 未安装，尝试回退到旧 SDK
@@ -574,28 +579,35 @@ class GeminiAnalyzer:
 
         Returns:
             是否成功切换
+
+        说明：
+        - 使用初始化时保存的 self._fallback_model_name
+        - 避免重复调用 get_config()，提高可维护性
         """
         try:
-            config = get_config()
-            fallback_model = config.gemini_model_fallback
+            # 使用初始化时保存的备选模型名称
+            fallback_model = self._fallback_model_name
+
+            if not fallback_model:
+                logger.error("[LLM] 未配置备选模型，无法切换")
+                return False
 
             logger.warning(f"[LLM] 切换到备选模型: {fallback_model}")
 
             # 检查使用的是新版还是旧版 SDK
             if getattr(self, '_use_legacy_sdk', False):
-                # 旧版 SDK
+                # 旧版 SDK - 需要重新创建 GenerativeModel 实例
                 self._legacy_model = self._legacy_genai.GenerativeModel(
                     model_name=fallback_model,
                     system_instruction=self.SYSTEM_PROMPT,
                 )
-            else:
-                # 新版 SDK - 只需切换模型名称字符串
-                pass
+            # 新版 SDK - 只需切换模型名称字符串（客户端已初始化）
+            # 无需额外操作，客户端会使用新的模型名称
 
             self._model = fallback_model
             self._current_model_name = fallback_model
             self._using_fallback = True
-            logger.info(f"[LLM] 备选模型 {fallback_model} 初始化成功")
+            logger.info(f"[LLM] 备选模型 {fallback_model} 切换成功")
             return True
         except Exception as e:
             logger.error(f"[LLM] 切换备选模型失败: {e}")
