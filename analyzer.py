@@ -585,6 +585,10 @@ class GeminiAnalyzer:
 
         当新版 SDK 不可用时使用此方法
 
+        注意：如需使用代理，请在程序启动前设置环境变量：
+              HTTP_PROXY / HTTPS_PROXY（大写）
+              或 http_proxy / https_proxy（小写）
+
         Args:
             model_name: 主模型名称
             fallback_model: 备选模型名称
@@ -593,19 +597,33 @@ class GeminiAnalyzer:
             import google.generativeai as genai
             import os
 
-            # 确保代理环境变量设置正确（旧版 SDK 使用大写环境变量）
-            # 注意：直接修改 os.environ 在多线程环境下不安全，仅在主线程初始化时使用
-            if not os.getenv("HTTP_PROXY") and os.getenv("http_proxy"):
-                os.environ["HTTP_PROXY"] = os.getenv("http_proxy")
-            if not os.getenv("HTTPS_PROXY") and os.getenv("https_proxy"):
-                os.environ["HTTPS_PROXY"] = os.getenv("https_proxy")
+            # 代理配置检测（只检测，不修改 os.environ）
+            # 原因：修改全局 os.environ 在多线程环境下存在竞态条件
+            proxy_detected = any([
+                os.getenv("HTTP_PROXY"),
+                os.getenv("HTTPS_PROXY"),
+                os.getenv("http_proxy"),
+                os.getenv("https_proxy"),
+            ])
 
-            # 记录警告：多线程环境下可能有问题
-            if threading.active_count() > 1:
-                logger.warning(
-                    "[旧版 SDK] 在多线程环境下修改环境变量可能导致竞态条件。"
-                    "建议：在启动程序前设置环境变量，或使用新版 google-genai SDK。"
-                )
+            # 如果检测到小写变量但没有大写变量，给出警告
+            has_lowercase = os.getenv("http_proxy") or os.getenv("https_proxy")
+            has_uppercase = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+
+            if proxy_detected:
+                if has_lowercase and not has_uppercase:
+                    logger.warning(
+                        "[旧版 SDK] 检测到小写代理环境变量 (http_proxy/https_proxy)，"
+                        "但旧版 google.generativeai SDK 优先使用大写变量 (HTTP_PROXY/HTTPS_PROXY)。"
+                        "请在启动程序前设置：\n"
+                        "  export HTTP_PROXY=...  # Linux/Mac\n"
+                        "  set HTTP_PROXY=...     # Windows\n"
+                        "或使用新版 google-genai SDK（推荐）。"
+                    )
+                else:
+                    logger.debug("[旧版 SDK] 检测到代理配置（HTTP_PROXY/HTTPS_PROXY）")
+            else:
+                logger.debug("[旧版 SDK] 未检测到代理配置")
 
             # 配置 API Key
             genai.configure(api_key=self._api_key)
