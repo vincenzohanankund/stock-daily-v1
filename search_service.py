@@ -813,9 +813,9 @@ class SearchService:
             self._providers.append(SerpAPISearchProvider(serpapi_keys))
             logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
 
-        # 4. SearXNG 作为最后的后备选项（免费，无需 API Key）
-        # 只有在没有配置任何其他搜索引擎且提供了 searxng_url 时才启用
-        if not self._providers and searxng_url:
+        # 4. SearXNG 作为免费后备选项（无需 API Key）
+        # 只要配置了 searxng_url 就启用（不依赖其他搜索引擎是否配置）
+        if searxng_url:
             try:
                 self._providers.append(SearXNGSearchProvider(
                     base_url=searxng_url,
@@ -823,10 +823,12 @@ class SearchService:
                     language=searxng_language,
                     time_range=searxng_time_range
                 ))
-                logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（实例: {searxng_url}）")
+                logger.info(f"已配置 SearXNG 搜索（实例: {searxng_url}）")
             except ValueError as e:
                 logger.warning(f"SearXNG 初始化失败: {e}")
-        elif not self._providers:
+
+        # 检查是否有可用的搜索引擎
+        if not self._providers:
             logger.warning(
                 "未配置任何搜索引擎！请在 .env 中配置以下之一：\n"
                 "- BOCHA_API_KEYS（博查搜索）\n"

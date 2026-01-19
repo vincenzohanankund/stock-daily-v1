@@ -764,13 +764,16 @@ class GeminiAnalyzer:
             except Exception as e:
                 last_error = e
                 error_str = str(e)
-                
-                # 检查是否是 429 限流错误
+
+                # 检查错误类型
                 is_rate_limit = '429' in error_str or 'quota' in error_str.lower() or 'rate' in error_str.lower()
-                
+                is_ssl_timeout = 'ssl' in error_str.lower() and 'handshake' in error_str.lower() and 'timeout' in error_str.lower()
+                is_connection_error = 'connection' in error_str.lower() or 'network' in error_str.lower()
+
                 if is_rate_limit:
+                    # 429 限流错误 - 指数退避重试
                     logger.warning(f"[Gemini] API 限流 (429)，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
-                    
+
                     # 如果已经重试了一半次数且还没切换过备选模型，尝试切换
                     if attempt >= max_retries // 2 and not tried_fallback:
                         if self._switch_to_fallback_model():
@@ -778,8 +781,29 @@ class GeminiAnalyzer:
                             logger.info("[Gemini] 已切换到备选模型，继续重试")
                         else:
                             logger.warning("[Gemini] 切换备选模型失败，继续使用当前模型重试")
+                elif is_ssl_timeout or is_connection_error:
+                    # SSL/网络错误 - 通常无法通过重试解决，快速切换到备选方案
+                    logger.warning(f"[Gemini] 网络/SSL 错误，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
+
+                    # SSL 超时通常是防火墙/代理问题，重试 2 次后直接尝试 OpenAI
+                    if attempt >= 1:
+                        logger.warning("[Gemini] 检测到网络连接问题，尝试切换到 OpenAI 兼容 API")
+                        if self._openai_client:
+                            try:
+                                return self._call_openai_api(prompt, generation_config)
+                            except Exception as openai_error:
+                                logger.warning(f"[Gemini] OpenAI 备选也失败: {str(openai_error)[:100]}")
+                                # 继续尝试 Gemini 重试
+                        elif config.openai_api_key and config.openai_base_url:
+                            # 尝试懒加载初始化 OpenAI
+                            self._init_openai_fallback()
+                            if self._openai_client:
+                                try:
+                                    return self._call_openai_api(prompt, generation_config)
+                                except Exception as openai_error:
+                                    logger.warning(f"[Gemini] OpenAI 备选也失败: {str(openai_error)[:100]}")
                 else:
-                    # 非限流错误，记录并继续重试
+                    # 其他错误，记录并继续重试
                     logger.warning(f"[Gemini] API 调用失败，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
         
         # Gemini 所有重试都失败，尝试 OpenAI 兼容 API
