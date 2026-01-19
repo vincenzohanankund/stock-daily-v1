@@ -760,6 +760,9 @@ class GeminiAnalyzer:
                 # 检查使用新版还是旧版 SDK
                 if getattr(self, '_use_legacy_sdk', False):
                     # 旧版 SDK 调用方式
+                    # 旧版 SDK 的 generation_config 需要是 GenerationConfig 对象或字典
+                    # 支持的参数：candidate_count, stop_sequences, max_output_tokens,
+                    #             temperature, top_p, top_k, presence_penalty, frequency_penalty
                     response = self._legacy_model.generate_content(
                         prompt,
                         generation_config=generation_config,
@@ -783,12 +786,42 @@ class GeminiAnalyzer:
                         ),
                     ]
 
-                    # 构建配置（system_instruction 直接使用字符串）
-                    config_obj = types.GenerateContentConfig(
-                        system_instruction=self.SYSTEM_PROMPT,  # 直接使用字符串
-                        temperature=generation_config.get('temperature', 0.7),
-                        max_output_tokens=generation_config.get('max_output_tokens', 8192),
-                    )
+                    # 构建配置：支持更多高级参数
+                    # 参数映射：generation_config 字典 -> GenerateContentConfig 参数
+                    config_kwargs = {
+                        'system_instruction': self.SYSTEM_PROMPT,  # 系统提示词
+                    }
+
+                    # 核心参数（常用）
+                    if 'temperature' in generation_config:
+                        config_kwargs['temperature'] = generation_config['temperature']
+                    if 'max_output_tokens' in generation_config:
+                        config_kwargs['max_output_tokens'] = generation_config['max_output_tokens']
+                    elif 'max_tokens' in generation_config:  # 兼容 max_tokens 别名
+                        config_kwargs['max_output_tokens'] = generation_config['max_tokens']
+
+                    # 采样参数
+                    if 'top_p' in generation_config:
+                        config_kwargs['topP'] = generation_config['top_p']
+                    if 'top_k' in generation_config:
+                        config_kwargs['topK'] = generation_config['top_k']
+                    if 'candidate_count' in generation_config:
+                        config_kwargs['candidateCount'] = generation_config['candidate_count']
+
+                    # 惩罚参数
+                    if 'presence_penalty' in generation_config:
+                        config_kwargs['presencePenalty'] = generation_config['presence_penalty']
+                    if 'frequency_penalty' in generation_config:
+                        config_kwargs['frequencyPenalty'] = generation_config['frequency_penalty']
+
+                    # 其他参数
+                    if 'stop_sequences' in generation_config:
+                        config_kwargs['stopSequences'] = generation_config['stop_sequences']
+                    if 'seed' in generation_config:
+                        config_kwargs['seed'] = generation_config['seed']
+
+                    # 构建 GenerateContentConfig
+                    config_obj = types.GenerateContentConfig(**config_kwargs)
 
                     # 调用新版 API（非流式）
                     response = self._genai_client.models.generate_content(
