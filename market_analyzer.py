@@ -344,24 +344,28 @@ class MarketAnalyzer:
         
         try:
             logger.info("[大盘] 调用大模型生成复盘报告...")
-            
+
             generation_config = {
                 'temperature': 0.7,
                 'max_output_tokens': 2048,
             }
-            
+
             # 根据 analyzer 使用的 API 类型调用
             if self.analyzer._use_openai:
                 # 使用 OpenAI 兼容 API
                 review = self.analyzer._call_openai_api(prompt, generation_config)
-            else:
-                # 使用 Gemini API
-                response = self.analyzer._model.generate_content(
+            elif getattr(self.analyzer, '_use_legacy_sdk', False):
+                # 使用旧版 Gemini SDK（google.generativeai）
+                response = self.analyzer._legacy_model.generate_content(
                     prompt,
                     generation_config=generation_config,
                 )
                 review = response.text.strip() if response and response.text else None
-            
+            else:
+                # 使用新版 Gemini SDK（google-genai）
+                # 直接调用 analyzer 的 _call_api_with_retry 方法
+                review = self.analyzer._call_api_with_retry(prompt, generation_config)
+
             if review:
                 logger.info(f"[大盘] 复盘报告生成成功，长度: {len(review)} 字符")
                 return review
