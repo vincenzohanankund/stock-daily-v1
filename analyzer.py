@@ -398,6 +398,16 @@ class GeminiAnalyzer:
         self._using_fallback = False  # 是否正在使用备选模型
         self._use_openai = False  # 是否使用 OpenAI 兼容 API
         self._openai_client = None  # OpenAI 客户端
+
+        # 新 SDK 相关属性
+        self._genai_client = None  # 新版 google-genai 客户端
+        self._genai_types = None  # 新版 SDK types 模块
+        self._fallback_model_name = None  # 备选模型名称
+        self._use_legacy_sdk = False  # 是否使用旧版 SDK
+
+        # 旧版 SDK 相关属性
+        self._legacy_genai = None  # 旧版 google.generativeai 模块
+        self._legacy_model = None  # 旧版模型实例
         
         # 检查 Gemini API Key 是否有效（过滤占位符）
         gemini_key_valid = self._api_key and not self._api_key.startswith('your_') and len(self._api_key) > 10
@@ -473,67 +483,116 @@ class GeminiAnalyzer:
     
     def _init_model(self) -> None:
         """
-        初始化 Gemini 模型
-        
+        初始化 Gemini 模型（使用新的 google-genai SDK）
+
         配置：
         - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
         - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
         """
         try:
-            import google.generativeai as genai
-            
-            # 配置 API Key
-            genai.configure(api_key=self._api_key)
-            
+            from google import genai
+            from google.genai import types
+
+            # 创建客户端（新 SDK 方式）
+            self._genai_client = genai.Client(api_key=self._api_key)
+            self._genai_types = types
+
             # 从配置获取模型名称
             config = get_config()
             model_name = config.gemini_model
             fallback_model = config.gemini_model_fallback
-            
+
             # 不再使用 Google Search Grounding（已知有兼容性问题）
             # 改为使用外部搜索服务（Tavily/SerpAPI）预先获取新闻
-            
+
+            # 新 SDK 使用字符串存储模型名称，而不是实例化的模型对象
+            self._model = model_name
+            self._current_model_name = model_name
+            self._using_fallback = False
+            self._fallback_model_name = fallback_model
+            logger.info(f"Gemini 客户端初始化成功 (模型: {model_name})")
+
+        except ImportError as e:
+            # 新 SDK 未安装，尝试回退到旧 SDK
+            logger.warning(f"google-genai SDK 未安装: {e}，尝试使用旧版 google.generativeai")
+            self._init_model_legacy()
+        except Exception as e:
+            logger.error(f"Gemini 模型初始化失败: {e}")
+            self._model = None
+
+    def _init_model_legacy(self) -> None:
+        """
+        初始化 Gemini 模型（旧版 google.generativeai SDK，作为后备）
+
+        当新版 SDK 不可用时使用此方法
+        """
+        try:
+            import google.generativeai as genai
+
+            # 配置 API Key
+            genai.configure(api_key=self._api_key)
+
+            # 从配置获取模型名称
+            config = get_config()
+            model_name = config.gemini_model
+            fallback_model = config.gemini_model_fallback
+
+            # 标记为使用旧版 SDK
+            self._use_legacy_sdk = True
+            self._legacy_genai = genai
+
             # 尝试初始化主模型
             try:
-                self._model = genai.GenerativeModel(
+                self._legacy_model = genai.GenerativeModel(
                     model_name=model_name,
                     system_instruction=self.SYSTEM_PROMPT,
                 )
+                self._model = model_name
                 self._current_model_name = model_name
                 self._using_fallback = False
-                logger.info(f"Gemini 模型初始化成功 (模型: {model_name})")
+                self._fallback_model_name = fallback_model
+                logger.info(f"Gemini 旧版 SDK 模型初始化成功 (模型: {model_name})")
             except Exception as model_error:
                 # 尝试备选模型
                 logger.warning(f"主模型 {model_name} 初始化失败: {model_error}，尝试备选模型 {fallback_model}")
-                self._model = genai.GenerativeModel(
+                self._legacy_model = genai.GenerativeModel(
                     model_name=fallback_model,
                     system_instruction=self.SYSTEM_PROMPT,
                 )
+                self._model = fallback_model
                 self._current_model_name = fallback_model
                 self._using_fallback = True
-                logger.info(f"Gemini 备选模型初始化成功 (模型: {fallback_model})")
-            
+                logger.info(f"Gemini 旧版 SDK 备选模型初始化成功 (模型: {fallback_model})")
+
         except Exception as e:
-            logger.error(f"Gemini 模型初始化失败: {e}")
+            logger.error(f"Gemini 旧版 SDK 模型初始化失败: {e}")
             self._model = None
     
     def _switch_to_fallback_model(self) -> bool:
         """
         切换到备选模型
-        
+
         Returns:
             是否成功切换
         """
         try:
-            import google.generativeai as genai
             config = get_config()
             fallback_model = config.gemini_model_fallback
-            
+
             logger.warning(f"[LLM] 切换到备选模型: {fallback_model}")
-            self._model = genai.GenerativeModel(
-                model_name=fallback_model,
-                system_instruction=self.SYSTEM_PROMPT,
-            )
+
+            # 检查使用的是新版还是旧版 SDK
+            if getattr(self, '_use_legacy_sdk', False):
+                # 旧版 SDK
+                self._legacy_model = self._legacy_genai.GenerativeModel(
+                    model_name=fallback_model,
+                    system_instruction=self.SYSTEM_PROMPT,
+                )
+            else:
+                # 新版 SDK - 只需切换模型名称字符串
+                pass
+
+            self._model = fallback_model
             self._current_model_name = fallback_model
             self._using_fallback = True
             logger.info(f"[LLM] 备选模型 {fallback_model} 初始化成功")
@@ -635,17 +694,51 @@ class GeminiAnalyzer:
                     delay = min(delay, 60)  # 最大60秒
                     logger.info(f"[Gemini] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
                     time.sleep(delay)
-                
-                response = self._model.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                    request_options={"timeout": 120}
-                )
-                
-                if response and response.text:
-                    return response.text
+
+                # 检查使用新版还是旧版 SDK
+                if getattr(self, '_use_legacy_sdk', False):
+                    # 旧版 SDK 调用方式
+                    response = self._legacy_model.generate_content(
+                        prompt,
+                        generation_config=generation_config,
+                        request_options={"timeout": 120}
+                    )
+                    if response and response.text:
+                        return response.text
+                    else:
+                        raise ValueError("Gemini 返回空响应")
                 else:
-                    raise ValueError("Gemini 返回空响应")
+                    # 新版 SDK 调用方式 (google-genai)
+                    types = self._genai_types
+
+                    # 构建内容
+                    contents = [
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_text(text=prompt),
+                            ],
+                        ),
+                    ]
+
+                    # 构建配置（system_instruction 直接使用字符串）
+                    config_obj = types.GenerateContentConfig(
+                        system_instruction=self.SYSTEM_PROMPT,  # 直接使用字符串
+                        temperature=generation_config.get('temperature', 0.7),
+                        max_output_tokens=generation_config.get('max_output_tokens', 8192),
+                    )
+
+                    # 调用新版 API（非流式）
+                    response = self._genai_client.models.generate_content(
+                        model=self._model,
+                        contents=contents,
+                        config=config_obj,
+                    )
+
+                    if response and response.text:
+                        return response.text
+                    else:
+                        raise ValueError("Gemini 返回空响应")
                     
             except Exception as e:
                 last_error = e

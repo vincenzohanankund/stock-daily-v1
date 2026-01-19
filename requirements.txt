@@ -23,7 +23,10 @@ pandas>=2.0.0               # 数据分析
 numpy>=1.24.0               # 数值计算
 
 # AI 分析
-google-generativeai>=0.8.0  # Gemini API
+# 新版 google-genai SDK（官方推荐）
+google-genai>=1.0.0         # 新版 Gemini API (google-genai SDK)
+# 旧版 google-generativeai SDK（作为后备，自动降级使用）
+google-generativeai>=0.8.0  # 旧版 Gemini API (google-generativeai SDK)
 openai>=1.0.0               # OpenAI 兼容 API（可选，支持 DeepSeek/通义千问等）
 
 # 搜索引擎（用于获取股票新闻）
