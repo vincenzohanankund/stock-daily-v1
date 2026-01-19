@@ -540,11 +540,22 @@ class SearXNGSearchProvider(BaseSearchProvider):
     - 开源项目，可自部署
     - 适合作为 Tavily/SerpAPI 不可用时的后备方案
 
-    文档：https://docs.searxng.org/
-    """
+    安全说明：
+    - ⚠️ 使用公共 SearXNG 实例存在隐私风险（搜索查询可能被实例管理员记录）
+    - 🔒 强烈建议使用自部署的 SearXNG 实例
+    - 📖 自部署文档：https://docs.searxng.org/admin/installation.html
 
-    # 默认 SearXNG 实例
-    DEFAULT_URL = "http://search.maolige.com:8888/"
+    公共实例列表（仅供参考，请自行评估风险）：
+    - https://searx.be        # 比利时
+    - https://search.sapti.me # 法国
+    - 更多见：https://searx.space/
+
+    配置方式：
+    在 .env 文件中添加：
+    ```
+    SEARXNG_URL=https://your-searxng-instance.com/
+    ```
+    """
 
     def __init__(self, api_keys: Optional[List[str]] = None, base_url: Optional[str] = None):
         """
@@ -552,11 +563,23 @@ class SearXNGSearchProvider(BaseSearchProvider):
 
         Args:
             api_keys: 保留参数（SearXNG 不需要 API Key，但保持接口兼容）
-            base_url: SearXNG 实例 URL（可选，默认使用公开实例）
+            base_url: SearXNG 实例 URL（必须提供，不使用默认值以确保安全）
+
+        Raises:
+            ValueError: 如果未提供 base_url
         """
         # 传递空的 keys 列表以保持接口兼容
         super().__init__(api_keys or [], "SearXNG")
-        self._base_url = base_url or self.DEFAULT_URL
+
+        if not base_url:
+            raise ValueError(
+                "SearXNGSearchProvider 需要 base_url 参数。"
+                "请在 .env 中配置 SEARXNG_URL，或使用自部署的 SearXNG 实例。"
+                "详见：https://docs.searxng.org/admin/installation.html"
+            )
+
+        # 规范化 URL（确保以 / 结尾）
+        self._base_url = base_url if base_url.endswith('/') else base_url + '/'
 
     @property
     def is_available(self) -> bool:
@@ -636,8 +659,11 @@ class SearXNGSearchProvider(BaseSearchProvider):
             answers = data.get('answers', [])
             organic_results = data.get('results', [])
 
-            # 添加 answers（如果有的话）
-            for answer in answers[:max_results]:
+            # 先添加 answers（优先级高），但不超过 max_results
+            remaining_quota = max_results
+            for answer in answers:
+                if remaining_quota <= 0:
+                    break
                 results.append(SearchResult(
                     title=f"💡 答案: {answer[:100]}...",
                     snippet=answer[:500],
@@ -645,9 +671,12 @@ class SearXNGSearchProvider(BaseSearchProvider):
                     source="SearXNG聚合",
                     published_date=None,
                 ))
+                remaining_quota -= 1
 
-            # 添加搜索结果
-            for item in organic_results[:max_results]:
+            # 用剩余配额添加 organic_results
+            for item in organic_results:
+                if remaining_quota <= 0:
+                    break
                 # SearXNG 结果格式
                 title = item.get('title', '')
                 url = item.get('url', '')
@@ -665,6 +694,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                     source=f"{source} ({engine})",
                     published_date=None,
                 ))
+                remaining_quota -= 1
 
             logger.info(f"[SearXNG] 搜索完成，query='{query}'，返回 {len(results)} 条结果")
 
@@ -752,7 +782,8 @@ class SearchService:
             bocha_keys: 博查搜索 API Key 列表
             tavily_keys: Tavily API Key 列表
             serpapi_keys: SerpAPI Key 列表
-            searxng_url: SearXNG 实例 URL（可选，默认使用内置的公开实例）
+            searxng_url: SearXNG 实例 URL（必须提供才能启用 SearXNG）
+                       ⚠️ 不再提供默认实例，需自行配置或自部署
         """
         self._providers: List[BaseSearchProvider] = []
 
@@ -773,13 +804,21 @@ class SearchService:
             logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
 
         # 4. SearXNG 作为最后的后备选项（免费，无需 API Key）
-        # 只有在没有配置任何其他搜索引擎时才自动启用
-        if not self._providers:
-            self._providers.append(SearXNGSearchProvider(base_url=searxng_url))
-            if searxng_url:
-                logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（自定义实例: {searxng_url}）")
-            else:
-                logger.info("未配置其他搜索引擎，启用 SearXNG 免费搜索作为后备（使用默认实例）")
+        # 只有在没有配置任何其他搜索引擎且提供了 searxng_url 时才启用
+        if not self._providers and searxng_url:
+            try:
+                self._providers.append(SearXNGSearchProvider(base_url=searxng_url))
+                logger.info(f"未配置其他搜索引擎，启用 SearXNG 免费搜索（实例: {searxng_url}）")
+            except ValueError as e:
+                logger.warning(f"SearXNG 初始化失败: {e}")
+        elif not self._providers:
+            logger.warning(
+                "未配置任何搜索引擎！请在 .env 中配置以下之一：\n"
+                "- BOCHA_API_KEYS（博查搜索）\n"
+                "- TAVILY_API_KEYS（Tavily）\n"
+                "- SERPAPI_API_KEYS（SerpAPI）\n"
+                "- SEARXNG_URL（SearXNG 自部署实例）"
+            )
     
     @property
     def is_available(self) -> bool:
