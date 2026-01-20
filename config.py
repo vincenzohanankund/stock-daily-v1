@@ -49,7 +49,12 @@ class Config:
     gemini_max_retries: int = 5  # 最大重试次数
     gemini_retry_delay: float = 5.0  # 重试基础延时（秒）
     
-    # OpenAI 兼容 API（备选，当 Gemini 不可用时使用）
+    # HiAPI 三方 Gemini 代理（备选，优先级在官方Gemini之后）
+    hiapi_api_key: Optional[str] = None
+    hiapi_base_url: str = "https://hiapi.online/v1"
+    hiapi_model: str = "gemini-2.5-pro"  # HiAPI 支持的 Gemini 模型
+    
+    # OpenAI 兼容 API（备选，当 Gemini 和 HiAPI 都不可用时使用）
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None  # 如: https://api.openai.com/v1
     openai_model: str = "gpt-4o-mini"  # OpenAI 兼容模型名称
@@ -191,6 +196,9 @@ class Config:
             gemini_request_delay=float(os.getenv('GEMINI_REQUEST_DELAY', '2.0')),
             gemini_max_retries=int(os.getenv('GEMINI_MAX_RETRIES', '5')),
             gemini_retry_delay=float(os.getenv('GEMINI_RETRY_DELAY', '5.0')),
+            hiapi_api_key=os.getenv('HIAPI_API_KEY'),
+            hiapi_base_url=os.getenv('HIAPI_BASE_URL', 'https://hiapi.online/v1'),
+            hiapi_model=os.getenv('HIAPI_MODEL', 'gemini-2.5-pro'),
             openai_api_key=os.getenv('OPENAI_API_KEY'),
             openai_base_url=os.getenv('OPENAI_BASE_URL'),
             openai_model=os.getenv('OPENAI_MODEL', 'gpt-4o-mini'),
@@ -273,10 +281,19 @@ class Config:
         if not self.tushare_token:
             warnings.append("提示：未配置 Tushare Token，将使用其他数据源")
         
-        if not self.gemini_api_key and not self.openai_api_key:
-            warnings.append("警告：未配置 Gemini 或 OpenAI API Key，AI 分析功能将不可用")
-        elif not self.gemini_api_key:
-            warnings.append("提示：未配置 Gemini API Key，将使用 OpenAI 兼容 API")
+        # 检查 AI API 配置（支持多个同时配置，作为备选）
+        configured_apis = []
+        if self.gemini_api_key and not self.gemini_api_key.startswith('your_'):
+            configured_apis.append(f"Gemini 官方 (模型: {self.gemini_model})")
+        if self.hiapi_api_key and not self.hiapi_api_key.startswith('your_'):
+            configured_apis.append(f"HiAPI (模型: {self.hiapi_model})")
+        if self.openai_api_key and not self.openai_api_key.startswith('your_'):
+            configured_apis.append(f"OpenAI (模型: {self.openai_model})")
+        
+        if not configured_apis:
+            warnings.append("警告：未配置任何 AI API Key (GEMINI_API_KEY/HIAPI_API_KEY/OPENAI_API_KEY)，AI 分析功能将不可用")
+        else:
+            warnings.append(f"✓ 已配置 AI API: {', '.join(configured_apis)}")
         
         if not self.bocha_api_keys and not self.tavily_api_keys and not self.serpapi_keys:
             warnings.append("提示：未配置搜索引擎 API Key (Bocha/Tavily/SerpAPI)，新闻搜索功能将不可用")

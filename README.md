@@ -26,7 +26,8 @@
 - **新闻搜索**: Tavily、SerpAPI、Bocha
 - **AI 分析**: 
   - 主力：Google Gemini（gemini-3-flash-preview）—— [免费获取](https://aistudio.google.com/)
-  - 备选：应大家要求，也支持了OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等）
+  - 备选1：HiAPI 三方代理（国内友好，支持 gemini-2.5-pro）—— [HiAPI 官网](https://hiapi.online)
+  - 备选2：OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等）
 
 ### 🛡️ 交易理念内置
 - ❌ **严禁追高** - 乖离率 > 5% 自动标记「危险」
@@ -48,16 +49,20 @@
 
 进入你 Fork 的仓库 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
 
-**AI 模型配置（二选一）**
+**AI 模型配置（三选一）**
 
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
 | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/) 获取免费 Key | ✅* |
+| `HIAPI_API_KEY` | [HiAPI](https://hiapi.online) 三方 Gemini 代理（国内友好） | 可选 |
+| `HIAPI_MODEL` | HiAPI 模型名称（默认 `gemini-2.5-pro`） | 可选 |
 | `OPENAI_API_KEY` | OpenAI 兼容 API Key（支持 DeepSeek、通义千问等） | 可选 |
 | `OPENAI_BASE_URL` | OpenAI 兼容 API 地址（如 `https://api.deepseek.com/v1`） | 可选 |
 | `OPENAI_MODEL` | 模型名称（如 `deepseek-chat`） | 可选 |
 
-> *注：`GEMINI_API_KEY` 和 `OPENAI_API_KEY` 至少配置一个
+> *注：`GEMINI_API_KEY`、`HIAPI_API_KEY`、`OPENAI_API_KEY` 至少配置一个
+> 
+> 💡 **优先级**：Gemini 官方 → HiAPI 三方 → OpenAI 兼容（自动故障转移）
 
 **通知渠道配置（可同时配置多个，全部推送）**
 
@@ -221,6 +226,7 @@ daily_stock_analysis/
 
 ### 🤖 AI 模型支持
 - [x] Google Gemini（主力，免费额度）
+- [x] HiAPI 三方代理（国内友好，支持 Gemini 2.5 Pro）
 - [x] OpenAI 兼容 API（支持 GPT-4/DeepSeek/通义千问/Claude/文心一言 等）
 - [x] 本地模型（Ollama）
 

@@ -386,7 +386,10 @@ class GeminiAnalyzer:
         """
         初始化 AI 分析器
         
-        优先级：Gemini > OpenAI 兼容 API
+        会根据配置的 API Key 自动选择可用的服务：
+        - 如果配置了 Gemini 官方，优先使用
+        - 如果配置了 HiAPI，作为备选
+        - 如果配置了 OpenAI 兼容 API，作为最后备选
         
         Args:
             api_key: Gemini API Key（可选，默认从配置读取）
@@ -397,30 +400,97 @@ class GeminiAnalyzer:
         self._current_model_name = None  # 当前使用的模型名称
         self._using_fallback = False  # 是否正在使用备选模型
         self._use_openai = False  # 是否使用 OpenAI 兼容 API
+        self._use_hiapi = False  # 是否使用 HiAPI
         self._openai_client = None  # OpenAI 客户端
+        self._hiapi_client = None  # HiAPI 客户端
         
-        # 检查 Gemini API Key 是否有效（过滤占位符）
-        gemini_key_valid = self._api_key and not self._api_key.startswith('your_') and len(self._api_key) > 10
+        # 检查各个 API Key 是否有效（过滤占位符和空值）
+        gemini_key_valid = (
+            self._api_key and 
+            not self._api_key.startswith('your_') and 
+            len(self._api_key) > 10
+        )
+        hiapi_key_valid = (
+            config.hiapi_api_key and 
+            not config.hiapi_api_key.startswith('your_') and 
+            len(config.hiapi_api_key) > 10
+        )
+        openai_key_valid = (
+            config.openai_api_key and 
+            not config.openai_api_key.startswith('your_') and 
+            len(config.openai_api_key) > 10
+        )
         
-        # 优先尝试初始化 Gemini
-        if gemini_key_valid:
+        # 按照配置的 API 依次尝试初始化
+        initialized = False
+        
+        # 1. 尝试 Gemini 官方
+        if gemini_key_valid and not initialized:
             try:
                 self._init_model()
+                initialized = True
+                logger.info(f"使用 Gemini 官方 API (模型: {self._current_model_name})")
             except Exception as e:
-                logger.warning(f"Gemini 初始化失败: {e}，尝试 OpenAI 兼容 API")
-                self._init_openai_fallback()
-        else:
-            # Gemini Key 未配置，尝试 OpenAI
-            logger.info("Gemini API Key 未配置，尝试使用 OpenAI 兼容 API")
-            self._init_openai_fallback()
+                logger.warning(f"Gemini 官方 API 初始化失败: {e}")
         
-        # 两者都未配置
-        if not self._model and not self._openai_client:
-            logger.warning("未配置任何 AI API Key，AI 分析功能将不可用")
+        # 2. 尝试 HiAPI
+        if hiapi_key_valid and not initialized:
+            try:
+                self._init_hiapi()
+                initialized = True
+                logger.info(f"使用 HiAPI 三方代理 (模型: {config.hiapi_model})")
+            except Exception as e:
+                logger.warning(f"HiAPI 初始化失败: {e}")
+        
+        # 3. 尝试 OpenAI 兼容 API
+        if openai_key_valid and not initialized:
+            try:
+                self._init_openai()
+                initialized = True
+                logger.info(f"使用 OpenAI 兼容 API (模型: {config.openai_model})")
+            except Exception as e:
+                logger.warning(f"OpenAI 兼容 API 初始化失败: {e}")
+        
+        # 都未配置或初始化失败
+        if not initialized:
+            available_apis = []
+            if gemini_key_valid:
+                available_apis.append("Gemini")
+            if hiapi_key_valid:
+                available_apis.append("HiAPI")
+            if openai_key_valid:
+                available_apis.append("OpenAI")
+            
+            if available_apis:
+                logger.warning(f"配置了 {', '.join(available_apis)} API Key，但初始化都失败")
+            else:
+                logger.warning("未配置任何 AI API Key (GEMINI_API_KEY/HIAPI_API_KEY/OPENAI_API_KEY)")
     
-    def _init_openai_fallback(self) -> None:
+    def _init_hiapi(self) -> None:
         """
-        初始化 OpenAI 兼容 API 作为备选
+        初始化 HiAPI 三方 Gemini 代理
+        
+        HiAPI 使用 OpenAI 兼容格式调用 Gemini 模型
+        """
+        config = get_config()
+        
+        # 分离 import 和客户端创建，以便提供更准确的错误信息
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("未安装 openai 库，请运行: pip install openai")
+        
+        self._hiapi_client = OpenAI(
+            api_key=config.hiapi_api_key,
+            base_url=config.hiapi_base_url
+        )
+        self._current_model_name = config.hiapi_model
+        self._use_hiapi = True
+        logger.debug(f"HiAPI 初始化成功 (base_url: {config.hiapi_base_url}, model: {config.hiapi_model})")
+    
+    def _init_openai(self) -> None:
+        """
+        初始化 OpenAI 兼容 API
         
         支持所有 OpenAI 格式的 API，包括：
         - OpenAI 官方
@@ -430,46 +500,21 @@ class GeminiAnalyzer:
         """
         config = get_config()
         
-        # 检查 OpenAI API Key 是否有效（过滤占位符）
-        openai_key_valid = (
-            config.openai_api_key and 
-            not config.openai_api_key.startswith('your_') and 
-            len(config.openai_api_key) > 10
-        )
-        
-        if not openai_key_valid:
-            logger.debug("OpenAI 兼容 API 未配置或配置无效")
-            return
-        
         # 分离 import 和客户端创建，以便提供更准确的错误信息
         try:
             from openai import OpenAI
         except ImportError:
-            logger.error("未安装 openai 库，请运行: pip install openai")
-            return
+            raise ImportError("未安装 openai 库，请运行: pip install openai")
         
-        try:
-            # base_url 可选，不填则使用 OpenAI 官方默认地址
-            client_kwargs = {"api_key": config.openai_api_key}
-            if config.openai_base_url and config.openai_base_url.startswith('http'):
-                client_kwargs["base_url"] = config.openai_base_url
-            
-            self._openai_client = OpenAI(**client_kwargs)
-            self._current_model_name = config.openai_model
-            self._use_openai = True
-            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model})")
-        except ImportError as e:
-            # 依赖缺失（如 socksio）
-            if 'socksio' in str(e).lower() or 'socks' in str(e).lower():
-                logger.error(f"OpenAI 客户端需要 SOCKS 代理支持，请运行: pip install httpx[socks] 或 pip install socksio")
-            else:
-                logger.error(f"OpenAI 依赖缺失: {e}")
-        except Exception as e:
-            error_msg = str(e).lower()
-            if 'socks' in error_msg or 'socksio' in error_msg or 'proxy' in error_msg:
-                logger.error(f"OpenAI 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
-            else:
-                logger.error(f"OpenAI 兼容 API 初始化失败: {e}")
+        # base_url 可选，不填则使用 OpenAI 官方默认地址
+        client_kwargs = {"api_key": config.openai_api_key}
+        if config.openai_base_url and config.openai_base_url.startswith('http'):
+            client_kwargs["base_url"] = config.openai_base_url
+        
+        self._openai_client = OpenAI(**client_kwargs)
+        self._current_model_name = config.openai_model
+        self._use_openai = True
+        logger.debug(f"OpenAI 初始化成功 (base_url: {config.openai_base_url or 'default'}, model: {config.openai_model})")
     
     def _init_model(self) -> None:
         """
@@ -544,7 +589,7 @@ class GeminiAnalyzer:
     
     def is_available(self) -> bool:
         """检查分析器是否可用"""
-        return self._model is not None or self._openai_client is not None
+        return self._model is not None or self._hiapi_client is not None or self._openai_client is not None
     
     def _call_openai_api(self, prompt: str, generation_config: dict) -> str:
         """
@@ -602,12 +647,13 @@ class GeminiAnalyzer:
         """
         调用 AI API，带有重试和模型切换机制
         
-        优先级：Gemini > Gemini 备选模型 > OpenAI 兼容 API
+        优先级：Gemini 官方 > Gemini 备选模型 > HiAPI > OpenAI 兼容 API
         
         处理 429 限流错误：
         1. 先指数退避重试
         2. 多次失败后切换到备选模型
-        3. Gemini 完全失败后尝试 OpenAI
+        3. Gemini 完全失败后尝试 HiAPI
+        4. HiAPI 失败后尝试 OpenAI
         
         Args:
             prompt: 提示词
@@ -616,6 +662,10 @@ class GeminiAnalyzer:
         Returns:
             响应文本
         """
+        # 如果已经在使用 HiAPI 模式，直接调用 HiAPI
+        if self._use_hiapi:
+            return self._call_openai_api(prompt, generation_config)
+        
         # 如果已经在使用 OpenAI 模式，直接调用 OpenAI
         if self._use_openai:
             return self._call_openai_api(prompt, generation_config)
@@ -668,27 +718,50 @@ class GeminiAnalyzer:
                     # 非限流错误，记录并继续重试
                     logger.warning(f"[Gemini] API 调用失败，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
         
-        # Gemini 所有重试都失败，尝试 OpenAI 兼容 API
-        if self._openai_client:
-            logger.warning("[Gemini] 所有重试失败，切换到 OpenAI 兼容 API")
-            try:
-                return self._call_openai_api(prompt, generation_config)
-            except Exception as openai_error:
-                logger.error(f"[OpenAI] 备选 API 也失败: {openai_error}")
-                raise last_error or openai_error
-        elif config.openai_api_key and config.openai_base_url:
-            # 尝试懒加载初始化 OpenAI
-            logger.warning("[Gemini] 所有重试失败，尝试初始化 OpenAI 兼容 API")
-            self._init_openai_fallback()
-            if self._openai_client:
+        # Gemini 所有重试都失败，尝试备选 API
+        # 检查配置的备选 API 并按顺序尝试
+        fallback_apis = []
+        
+        # 检查 HiAPI 是否已配置
+        hiapi_key_valid = (
+            config.hiapi_api_key and 
+            not config.hiapi_api_key.startswith('your_') and 
+            len(config.hiapi_api_key) > 10
+        )
+        if hiapi_key_valid:
+            fallback_apis.append(('HiAPI', self._hiapi_client, config.hiapi_api_key, self._init_hiapi))
+        
+        # 检查 OpenAI 是否已配置
+        openai_key_valid = (
+            config.openai_api_key and 
+            not config.openai_api_key.startswith('your_') and 
+            len(config.openai_api_key) > 10
+        )
+        if openai_key_valid:
+            fallback_apis.append(('OpenAI', self._openai_client, config.openai_api_key, self._init_openai))
+        
+        # 依次尝试备选 API
+        for api_name, client, api_key, init_func in fallback_apis:
+            if client:
+                # 客户端已初始化，直接调用
+                logger.warning(f"[Gemini] 所有重试失败，切换到 {api_name}")
                 try:
                     return self._call_openai_api(prompt, generation_config)
-                except Exception as openai_error:
-                    logger.error(f"[OpenAI] 备选 API 也失败: {openai_error}")
-                    raise last_error or openai_error
+                except Exception as e:
+                    logger.error(f"[{api_name}] 调用失败: {e}")
+                    continue
+            else:
+                # 客户端未初始化，尝试懒加载
+                logger.warning(f"[Gemini] 所有重试失败，尝试初始化 {api_name}")
+                try:
+                    init_func()
+                    return self._call_openai_api(prompt, generation_config)
+                except Exception as e:
+                    logger.error(f"[{api_name}] 初始化或调用失败: {e}")
+                    continue
         
         # 所有方式都失败
-        raise last_error or Exception("所有 AI API 调用失败，已达最大重试次数")
+        raise last_error or Exception("所有 AI API 调用失败 (Gemini/HiAPI/OpenAI)，已达最大重试次数")
     
     def analyze(
         self, 
