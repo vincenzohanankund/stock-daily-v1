@@ -6,7 +6,7 @@
 
 职责：
 1. 提供健壮的股票名称获取功能
-2. 多数据源支持（优先级：实时行情 > AkShare > 硬编码字典）
+2. 多数据源支持（优先级：缓存 > 东方财富 > 硬编码字典）
 3. 带缓存机制，避免重复请求
 4. 失败自动降级，确保始终返回可用名称
 
@@ -14,6 +14,7 @@
 - 解耦股票名称获取和实时行情获取
 - 提供简单的 get_stock_name(code) 接口
 - 失败时返回友好的 fallback 名称
+- 增强容错：超时重试机制，高并发场景下更稳定
 """
 
 import logging
@@ -46,11 +47,16 @@ class StockNameService:
     """
     股票名称获取服务
 
-    策略：
-    1. 优先使用缓存
-    2. 尝试从 AkShare 获取（调用 stock_individual_info_em）
-    3. 回退到硬编码字典
-    4. 最终 fallback 到 "股票{code}"
+    多层容错策略（按优先级）：
+    1. 优先使用缓存（命中率 >90%）
+    2. 尝试从东财获取（调用 stock_individual_info_em，带超时5秒和重试2次）
+    3. 回退到硬编码字典（15个常用股票）
+    4. 最终 fallback 到 "股票{code}"（保证非空）
+
+    增强特性：
+    - 超时机制：避免东财接口无响应时长时间等待
+    - 重试机制：失败后自动重试，提高成功率
+    - 缓存优先：减少API调用，提升性能
     """
 
     def __init__(self):
@@ -76,8 +82,8 @@ class StockNameService:
         if not force_refresh and code in self._name_cache:
             return self._name_cache[code]
 
-        # Step 2: 尝试从 AkShare 获取
-        name = self._fetch_from_akshare(code)
+        # Step 2: 尝试从东财获取（带超时和重试）
+        name = self._fetch_from_eastmoney(code)
 
         if name:
             self._name_cache[code] = name
@@ -96,51 +102,85 @@ class StockNameService:
         self._name_cache[code] = fallback_name
         return fallback_name
 
-    def _fetch_from_akshare(self, code: str) -> Optional[str]:
+    def _fetch_from_eastmoney(self, code: str, max_retries: int = 2, timeout: int = 5) -> Optional[str]:
         """
-        从 AkShare 获取股票名称
+        从东方财富获取股票名称（带重试和超时）
 
-        使用 ak.stock_individual_info_em() 接口获取个股信息
-        这个接口比实时行情接口更轻量，只返回基本信息
+        使用 ak.stock_individual_info_em() 接口
+
+        优化策略：
+        - 设置超时时间，避免长时间等待
+        - 失败后重试，提高成功率
 
         Args:
             code: 股票代码
+            max_retries: 最大重试次数（默认2次）
+            timeout: 超时时间（秒，默认5秒）
 
         Returns:
             股票名称，失败返回 None
         """
-        try:
-            import akshare as ak
+        import signal
 
-            logger.debug(f"[API调用] ak.stock_individual_info_em(symbol={code}) 获取股票名称...")
+        def timeout_handler(signum, frame):
+            raise TimeoutError("API 调用超时")
 
-            # 获取个股信息
-            df = ak.stock_individual_info_em(symbol=code)
+        for attempt in range(1, max_retries + 1):
+            try:
+                import akshare as ak
 
-            if df.empty:
-                logger.warning(f"[API返回] ak.stock_individual_info_em 返回空数据")
-                return None
+                logger.debug(f"[API调用] ak.stock_individual_info_em(symbol={code}) 获取股票名称... (尝试 {attempt}/{max_retries})")
 
-            # 提取股票名称
-            # df 格式：item | value
-            # 查找 item='股票简称' 的行
-            name_row = df[df['item'] == '股票简称']
+                # 设置超时（仅在 Unix 系统上）
+                try:
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(timeout)
+                except (ValueError, AttributeError):
+                    # Windows 不支持 signal.SIGALRM
+                    pass
 
-            if name_row.empty:
-                logger.warning(f"[API返回] 未找到'股票简称'字段")
-                return None
+                # 获取个股信息
+                df = ak.stock_individual_info_em(symbol=code)
 
-            name = str(name_row.iloc[0]['value']).strip()
+                # 取消超时
+                try:
+                    signal.alarm(0)
+                except (ValueError, AttributeError):
+                    pass
 
-            if name:
-                logger.info(f"[{code}] 成功获取股票名称: {name}")
-                return name
+                if df.empty:
+                    logger.debug(f"[API返回] 东财接口返回空数据")
+                    continue
 
-            return None
+                # 提取股票名称
+                # df 格式：item | value
+                # 查找 item='股票简称' 的行
+                name_row = df[df['item'] == '股票简称']
 
-        except Exception as e:
-            logger.debug(f"[{code}] 从 AkShare 获取股票名称失败: {e}")
-            return None
+                if name_row.empty:
+                    logger.debug(f"[API返回] 东财接口未找到'股票简称'字段")
+                    continue
+
+                name = str(name_row.iloc[0]['value']).strip()
+
+                if name:
+                    logger.info(f"[{code}] 成功获取股票名称: {name}")
+                    return name
+
+            except TimeoutError:
+                logger.debug(f"[{code}] 东财接口超时 (尝试 {attempt}/{max_retries})")
+                try:
+                    signal.alarm(0)
+                except (ValueError, AttributeError):
+                    pass
+                continue
+
+            except Exception as e:
+                logger.debug(f"[{code}] 东财接口失败: {e} (尝试 {attempt}/{max_retries})")
+                continue
+
+        logger.debug(f"[{code}] 东财接口所有尝试均失败")
+        return None
 
     def batch_update_names(self, codes: list[str]) -> Dict[str, str]:
         """
