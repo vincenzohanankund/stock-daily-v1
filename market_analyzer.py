@@ -157,29 +157,38 @@ class MarketAnalyzer:
             df = self._call_akshare_with_retry(ak.stock_zh_index_spot_sina, "指数行情", attempts=2)
             
             if df is not None and not df.empty:
+                # 确定代码列名
+                code_col = '代码' if '代码' in df.columns else 'code'
+                
                 for code_with_prefix, name in self.MAIN_INDICES.items():
-                    # 新浪接口返回的是 code 列不带前缀，但我们可以通过其他方式匹配
-                    # 或者直接过滤
+                    # 新浪接口返回可能带前缀也可能不带
                     code_only = code_with_prefix[2:] # 000001
                     
-                    row = df[df['code'] == code_with_prefix] # 某些版本直接带前缀
+                    row = df[df[code_col] == code_with_prefix]
                     if row.empty:
-                        row = df[df['code'] == code_only]
+                        row = df[df[code_col] == code_only]
                     
                     if not row.empty:
                         row = row.iloc[0]
+                        # 兼容中英文列名
+                        def get_val(r, *keys):
+                            for k in keys:
+                                if k in r and r[k] is not None:
+                                    return r[k]
+                            return 0
+
                         index = MarketIndex(
                             code=code_with_prefix,
                             name=name,
-                            current=float(row.get('price', 0) or 0),
-                            change=float(row.get('change', 0) or 0),
-                            change_pct=float(row.get('percentage', 0) or 0),
-                            open=float(row.get('open', 0) or 0),
-                            high=float(row.get('high', 0) or 0),
-                            low=float(row.get('low', 0) or 0),
-                            prev_close=float(row.get('last_close', 0) or 0),
-                            volume=float(row.get('volume', 0) or 0),
-                            amount=float(row.get('amount', 0) or 0),
+                            current=float(get_val(row, 'price', '最新价', 'current_price') or 0),
+                            change=float(get_val(row, 'change', '涨跌额') or 0),
+                            change_pct=float(get_val(row, 'percentage', '涨跌幅') or 0),
+                            open=float(get_val(row, 'open', '今开') or 0),
+                            high=float(get_val(row, 'high', '最高') or 0),
+                            low=float(get_val(row, 'low', '最低') or 0),
+                            prev_close=float(get_val(row, 'last_close', '昨收') or 0),
+                            volume=float(get_val(row, 'volume', '成交量') or 0),
+                            amount=float(get_val(row, 'amount', '成交额') or 0),
                         )
                         # 计算振幅
                         if index.prev_close > 0:

@@ -670,7 +670,11 @@ class NotificationService:
                         "",
                     ])
                     for item in checklist:
-                        report_lines.append(item)
+                        # 确保以 - 开头
+                        clean_item = item.strip()
+                        if not clean_item.startswith(('-', '*', '+')):
+                            clean_item = f"- {clean_item}"
+                        report_lines.append(clean_item)
                     report_lines.append("")
                 
                 # ========== 📈 决策总结图 (Mermaid) ==========
@@ -681,7 +685,7 @@ class NotificationService:
                         report_lines.extend([
                             "### 📈 决策总结图",
                             "",
-                            f"![决策总结图]({chart_url})",
+                            f"![]({chart_url})",
                             "",
                         ])
             
@@ -856,7 +860,11 @@ class NotificationService:
                 if failed_checks:
                     lines.append("**检查未通过项**:")
                     for check in failed_checks[:3]:
-                        lines.append(f"   {check[:40]}")
+                        # 确保以 - 开头
+                        clean_check = check.strip()
+                        if not (clean_check.startswith('-') or clean_check.startswith('•')):
+                             clean_check = f"- {clean_check}"
+                        lines.append(f"   {clean_check[:40]}")
                     lines.append("")
             
             lines.append("---")
