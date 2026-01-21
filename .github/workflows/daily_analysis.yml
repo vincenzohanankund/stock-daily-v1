@@ -45,7 +45,7 @@ jobs:
         env:
           # Gemini AI
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-3-flash-preview' }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-3-pro-preview' }}
           GEMINI_MODEL_FALLBACK: ${{ secrets.GEMINI_MODEL_FALLBACK || 'gemini-2.5-flash' }}
           GEMINI_REQUEST_DELAY: '3.0'  # GitHub Actions 建议增加延时
           

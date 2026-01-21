@@ -476,7 +476,7 @@ class GeminiAnalyzer:
         初始化 Gemini 模型
         
         配置：
-        - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
+        - 使用 gemini-3-pro-preview 或 gemini-2.5-flash 模型
         - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
         """
         try:

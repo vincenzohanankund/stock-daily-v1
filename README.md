@@ -25,7 +25,7 @@
 - **行情数据**: AkShare（免费）、Tushare、Baostock、YFinance
 - **新闻搜索**: Tavily、SerpAPI、Bocha
 - **AI 分析**: 
-  - 主力：Google Gemini（gemini-3-flash-preview）—— [免费获取](https://aistudio.google.com/)
+- 主力：Google Gemini（gemini-3-pro-preview）—— [免费获取](https://aistudio.google.com/)
   - 备选：应大家要求，也支持了OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等）
 
 ### 🛡️ 交易理念内置
