@@ -44,7 +44,7 @@ from feishu_doc import FeishuDocManager
 from config import get_config, Config
 from storage import get_db, DatabaseManager
 from data_provider import DataFetcherManager
-from data_provider.akshare_fetcher import AkshareFetcher, RealtimeQuote, ChipDistribution
+from data_provider.akshare_fetcher import AkshareFetcher, RealtimeQuote, ChipDistribution, get_stock_name
 from analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP
 from notification import NotificationService, NotificationChannel, send_daily_report
 from search_service import SearchService, SearchResponse
@@ -249,7 +249,13 @@ class StockAnalysisPipeline:
             except Exception as e:
                 logger.warning(f"[{code}] 获取实时行情失败: {e}")
             
-            # 如果还是没有名称，使用代码作为名称
+            # 如果还是没有名称，尝试从名称缓存获取
+            if not stock_name:
+                stock_name = get_stock_name(code)
+                if stock_name:
+                    logger.info(f"[{code}] 从名称缓存获取: {stock_name}")
+
+            # 最后的回退：使用代码作为名称
             if not stock_name:
                 stock_name = f'股票{code}'
             

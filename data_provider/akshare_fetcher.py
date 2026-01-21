@@ -195,6 +195,109 @@ _etf_realtime_cache: Dict[str, Any] = {
     'ttl': 60  # 60秒缓存有效期
 }
 
+# 股票名称缓存（长期有效，股票名称很少变化）
+_stock_name_cache: Dict[str, str] = {}
+_stock_name_cache_loaded: bool = False
+
+
+def _load_stock_name_cache() -> None:
+    """
+    加载股票名称缓存
+
+    从 akshare 获取所有 A 股、ETF、港股的代码和名称映射
+    只在首次需要时加载，之后直接使用缓存
+    """
+    global _stock_name_cache, _stock_name_cache_loaded
+
+    if _stock_name_cache_loaded:
+        return
+
+    import akshare as ak
+
+    try:
+        # 1. 加载 A 股名称
+        logger.info("[名称缓存] 加载 A 股代码名称映射...")
+        try:
+            df_a = ak.stock_info_a_code_name()
+            for _, row in df_a.iterrows():
+                code = str(row.get('code', ''))
+                name = str(row.get('name', ''))
+                if code and name:
+                    _stock_name_cache[code] = name
+            logger.info(f"[名称缓存] 加载 {len(df_a)} 只 A 股名称")
+        except Exception as e:
+            logger.warning(f"[名称缓存] 加载 A 股名称失败: {e}")
+
+        # 2. 加载 ETF 名称
+        logger.info("[名称缓存] 加载 ETF 代码名称映射...")
+        try:
+            df_etf = ak.fund_etf_spot_em()
+            for _, row in df_etf.iterrows():
+                code = str(row.get('代码', ''))
+                name = str(row.get('名称', ''))
+                if code and name:
+                    _stock_name_cache[code] = name
+            logger.info(f"[名称缓存] 加载 {len(df_etf)} 只 ETF 名称")
+        except Exception as e:
+            logger.warning(f"[名称缓存] 加载 ETF 名称失败: {e}")
+
+        # 3. 加载港股名称
+        logger.info("[名称缓存] 加载港股代码名称映射...")
+        try:
+            df_hk = ak.stock_hk_spot_em()
+            for _, row in df_hk.iterrows():
+                code = str(row.get('代码', ''))
+                name = str(row.get('名称', ''))
+                if code and name:
+                    # 港股代码统一为 5 位
+                    code = code.zfill(5)
+                    _stock_name_cache[code] = name
+            logger.info(f"[名称缓存] 加载 {len(df_hk)} 只港股名称")
+        except Exception as e:
+            logger.warning(f"[名称缓存] 加载港股名称失败: {e}")
+
+        _stock_name_cache_loaded = True
+        logger.info(f"[名称缓存] 总共缓存 {len(_stock_name_cache)} 只股票名称")
+
+    except Exception as e:
+        logger.error(f"[名称缓存] 加载股票名称缓存失败: {e}")
+        _stock_name_cache_loaded = True  # 即使失败也标记为已加载，避免重复尝试
+
+
+def get_stock_name(stock_code: str) -> str:
+    """
+    获取股票名称
+
+    优先从缓存获取，缓存未命中时尝试加载缓存
+
+    Args:
+        stock_code: 股票代码
+
+    Returns:
+        股票名称，获取失败返回空字符串
+    """
+    global _stock_name_cache, _stock_name_cache_loaded
+
+    # 标准化代码格式
+    code = stock_code.strip()
+
+    # 港股代码标准化为 5 位
+    if _is_hk_code(code):
+        code = code.lower().replace('hk', '').zfill(5)
+
+    # 先检查缓存
+    if code in _stock_name_cache:
+        return _stock_name_cache[code]
+
+    # 缓存未命中，尝试加载完整缓存
+    if not _stock_name_cache_loaded:
+        _load_stock_name_cache()
+        if code in _stock_name_cache:
+            return _stock_name_cache[code]
+
+    # 仍然未找到，返回空字符串
+    return ''
+
 
 def _is_etf_code(stock_code: str) -> bool:
     """
