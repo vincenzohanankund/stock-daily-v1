@@ -181,18 +181,61 @@ USER_AGENTS = [
 ]
 
 
+def _should_use_long_cache() -> bool:
+    """
+    判断是否应该使用长缓存时间
+
+    如果当前时间在下午 16:00 之后，或者早上 9:30 之前，使用长缓存
+    其他时间（交易时段 9:30-16:00）使用短缓存（60秒）
+
+    Returns:
+        True 表示应该使用长缓存，False 表示使用短缓存
+    """
+    now = datetime.now()
+    current_time = now.hour * 60 + now.minute  # 转换为分钟
+
+    # 16:00 = 16 * 60 = 960 分钟
+    # 9:30 = 9 * 60 + 30 = 570 分钟
+    market_close = 16 * 60  # 16:00
+    market_open = 9 * 60 + 30  # 9:30
+
+    # 如果当前时间 >= 16:00 或者 < 9:30，使用长缓存
+    return current_time >= market_close or current_time < market_open
+
+
+def _get_cache_ttl() -> int:
+    """
+    获取动态缓存 TTL
+
+    Returns:
+        缓存有效期（秒）
+    """
+    if _should_use_long_cache():
+        # 长缓存：缓存到次日 9:30
+        now = datetime.now()
+        # 计算到次日 9:30 的秒数
+        from datetime import timedelta
+        cache_end_time = (now + timedelta(days=1)).replace(hour=9, minute=30, second=0, microsecond=0)
+        ttl_seconds = int((cache_end_time - now).total_seconds())
+        # 确保 TTL 至少为 60 秒
+        return max(ttl_seconds, 60)
+    else:
+        # 短缓存：60 秒
+        return 60
+
+
 # 缓存实时行情数据（避免重复请求）
 _realtime_cache: Dict[str, Any] = {
     'data': None,
     'timestamp': 0,
-    'ttl': 60  # 60秒缓存有效期
+    'ttl': 60  # 初始值，实际使用时动态计算
 }
 
 # ETF 实时行情缓存
 _etf_realtime_cache: Dict[str, Any] = {
     'data': None,
     'timestamp': 0,
-    'ttl': 60  # 60秒缓存有效期
+    'ttl': 60  # 初始值，实际使用时动态计算
 }
 
 
@@ -583,11 +626,29 @@ class AkshareFetcher(BaseFetcher):
         try:
             # 检查缓存
             current_time = time.time()
-            if (_realtime_cache['data'] is not None and 
-                current_time - _realtime_cache['timestamp'] < _realtime_cache['ttl']):
-                df = _realtime_cache['data']
-                logger.debug(f"[缓存命中] 使用缓存的A股实时行情数据")
+            # 动态计算缓存 TTL
+            cache_ttl = _get_cache_ttl()
+            # 检查缓存是否存在、未过期、且数据不为空
+            cached_data = _realtime_cache['data']
+            is_cache_valid = (
+                cached_data is not None and
+                not cached_data.empty and  # 关键：缓存数据不能为空
+                current_time - _realtime_cache['timestamp'] < cache_ttl
+            )
+
+            if is_cache_valid:
+                df = cached_data
+                cache_status = "长缓存(到次日9:30)" if _should_use_long_cache() else "短缓存(60s)"
+                logger.info(f"[缓存命中] 使用缓存的A股实时行情数据 ({cache_status})")
             else:
+                # 缓存失效或为空，需要重新获取
+                if cached_data is None:
+                    logger.info(f"[缓存未命中] 无缓存数据，需要重新获取A股实时行情")
+                elif cached_data.empty:
+                    logger.info(f"[缓存未命中] 缓存数据为空，需要重新获取A股实时行情")
+                else:
+                    logger.info(f"[缓存未命中] 缓存已过期，需要重新获取A股实时行情")
+
                 last_error: Optional[Exception] = None
                 df = None
                 for attempt in range(1, 3):
@@ -616,6 +677,8 @@ class AkshareFetcher(BaseFetcher):
                     df = pd.DataFrame()
                 _realtime_cache['data'] = df
                 _realtime_cache['timestamp'] = current_time
+                cache_status = "长缓存(到次日9:30)" if _should_use_long_cache() else "短缓存(60s)"
+                logger.info(f"[缓存更新] A股实时行情已缓存 ({cache_status})")
 
             if df is None or df.empty:
                 logger.warning(f"[实时行情] A股实时行情数据为空，跳过 {stock_code}")
@@ -683,11 +746,29 @@ class AkshareFetcher(BaseFetcher):
         try:
             # 检查缓存
             current_time = time.time()
-            if (_etf_realtime_cache['data'] is not None and 
-                current_time - _etf_realtime_cache['timestamp'] < _etf_realtime_cache['ttl']):
-                df = _etf_realtime_cache['data']
-                logger.debug(f"[缓存命中] 使用缓存的ETF实时行情数据")
+            # 动态计算缓存 TTL
+            cache_ttl = _get_cache_ttl()
+            # 检查缓存是否存在、未过期、且数据不为空
+            cached_data = _etf_realtime_cache['data']
+            is_cache_valid = (
+                cached_data is not None and
+                not cached_data.empty and  # 关键：缓存数据不能为空
+                current_time - _etf_realtime_cache['timestamp'] < cache_ttl
+            )
+
+            if is_cache_valid:
+                df = cached_data
+                cache_status = "长缓存(到次日9:30)" if _should_use_long_cache() else "短缓存(60s)"
+                logger.info(f"[缓存命中] 使用缓存的ETF实时行情数据 ({cache_status})")
             else:
+                # 缓存失效或为空，需要重新获取
+                if cached_data is None:
+                    logger.info(f"[缓存未命中] 无缓存数据，需要重新获取ETF实时行情")
+                elif cached_data.empty:
+                    logger.info(f"[缓存未命中] 缓存数据为空，需要重新获取ETF实时行情")
+                else:
+                    logger.info(f"[缓存未命中] 缓存已过期，需要重新获取ETF实时行情")
+
                 last_error: Optional[Exception] = None
                 df = None
                 for attempt in range(1, 3):
@@ -715,6 +796,8 @@ class AkshareFetcher(BaseFetcher):
                     df = pd.DataFrame()
                 _etf_realtime_cache['data'] = df
                 _etf_realtime_cache['timestamp'] = current_time
+                cache_status = "长缓存(到次日9:30)" if _should_use_long_cache() else "短缓存(60s)"
+                logger.info(f"[缓存更新] ETF实时行情已缓存 ({cache_status})")
 
             if df is None or df.empty:
                 logger.warning(f"[实时行情] ETF实时行情数据为空，跳过 {stock_code}")

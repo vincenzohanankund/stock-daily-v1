@@ -170,14 +170,28 @@ class Config:
             stock_list = ['600519', '000001', '300750']
         
         # 解析搜索引擎 API Keys（支持多个 key，逗号分隔）
+        def filter_valid_keys(keys: List[str]) -> List[str]:
+            """
+            过滤掉占位符和无效的 API Key
+
+            占位符特征：
+            - 以 'your_' 开头（如 your_tavily_key_here）
+            - 包含 '_here' 后缀
+            - 长度小于 10（真实 API Key 通常更长）
+            """
+            return [
+                k for k in keys
+                if k and len(k) >= 10 and not k.startswith('your_') and not k.endswith('_here')
+            ]
+
         bocha_keys_str = os.getenv('BOCHA_API_KEYS', '')
-        bocha_api_keys = [k.strip() for k in bocha_keys_str.split(',') if k.strip()]
-        
+        bocha_api_keys = filter_valid_keys([k.strip() for k in bocha_keys_str.split(',') if k.strip()])
+
         tavily_keys_str = os.getenv('TAVILY_API_KEYS', '')
-        tavily_api_keys = [k.strip() for k in tavily_keys_str.split(',') if k.strip()]
-        
+        tavily_api_keys = filter_valid_keys([k.strip() for k in tavily_keys_str.split(',') if k.strip()])
+
         serpapi_keys_str = os.getenv('SERPAPI_API_KEYS', '')
-        serpapi_keys = [k.strip() for k in serpapi_keys_str.split(',') if k.strip()]
+        serpapi_keys = filter_valid_keys([k.strip() for k in serpapi_keys_str.split(',') if k.strip()])
         
         return cls(
             stock_list=stock_list,

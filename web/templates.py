@@ -312,6 +312,43 @@ button:active {
     to { transform: rotate(360deg); }
 }
 
+/* Progress Bar */
+.task-progress {
+    margin-top: 0.5rem;
+}
+
+.task-progress-bar-bg {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.task-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.task-progress-text {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--text-light);
+}
+
+.task-progress-step {
+    font-weight: 500;
+}
+
+.task-progress-percent {
+    font-family: monospace;
+}
+
 /* Task List Container */
 .task-list {
     display: flex;
@@ -640,8 +677,8 @@ def render_config_page(
     // 任务管理
     const tasks = new Map(); // taskId -> {task, pollCount}
     let pollInterval = null;
-    const MAX_POLL_COUNT = 120; // 6 分钟超时：120 * 3000ms = 360000ms
-    const POLL_INTERVAL_MS = 3000;
+    const MAX_POLL_COUNT = 360; // 6 分钟超时：360 * 1000ms = 360000ms
+    const POLL_INTERVAL_MS = 1000; // 1秒轮询一次
     const MAX_TASKS_DISPLAY = 10;
     
     // 允许输入数字和字母（支持港股 hkxxxxx 格式）
@@ -664,12 +701,13 @@ def render_config_page(
         }
     });
     
-    // 更新按钮状态 - 支持 A股(6位数字) 或 港股(hk+5位数字)
+    // 更新按钮状态 - 支持 A股(6位数字) 或 港股(hk+1-5位数字) 或 纯5位数字港股
     function updateButtonState() {
         const code = codeInput.value.trim().toLowerCase();
         const isAStock = /^\\d{6}$/.test(code);           // A股: 600519
-        const isHKStock = /^hk\\d{5}$/.test(code);        // 港股: hk00700
-        submitBtn.disabled = !(isAStock || isHKStock);
+        const isHKStockWithPrefix = /^hk\\d{1,5}$/.test(code);  // 港股带前缀: hk700, hk1810, hk00700
+        const isHKStockNoPrefix = /^\\d{5}$/.test(code);   // 港股无前缀: 00700, 01810
+        submitBtn.disabled = !(isAStock || isHKStockWithPrefix || isHKStockNoPrefix);
     }
     
     // 格式化时间
@@ -706,13 +744,14 @@ def render_config_page(
         const status = task.status || 'pending';
         const code = task.code || taskId.split('_')[0];
         const result = task.result || {};
-        
+        const progress = task.progress || {};
+
         let statusIcon = '⏳';
         let statusText = '等待中';
         if (status === 'running') { statusIcon = '<span class="spinner"></span>'; statusText = '分析中'; }
         else if (status === 'completed') { statusIcon = '✓'; statusText = '完成'; }
         else if (status === 'failed') { statusIcon = '✗'; statusText = '失败'; }
-        
+
         let resultHtml = '';
         if (status === 'completed' && result.operation_advice) {
             const adviceClass = getAdviceClass(result.operation_advice);
@@ -723,15 +762,78 @@ def render_config_page(
         } else if (status === 'failed') {
             resultHtml = '<div class="task-result"><span class="task-advice sell">失败</span></div>';
         }
-        
+
+        // 进度条（运行中显示）
+        let progressHtml = '';
+        if (status === 'running' && progress.step) {
+            progressHtml = '<div class="task-progress">' +
+                '<div class="task-progress-bar-bg">' +
+                    '<div class="task-progress-bar-fill" style="width: ' + (progress.percent || 0) + '%"></div>' +
+                '</div>' +
+                '<div class="task-progress-text">' +
+                    '<span class="task-progress-step">' + (progress.step_name || '处理中') + '</span>' +
+                    '<span class="task-progress-percent">' + (progress.percent || 0) + '%</span>' +
+                '</div>' +
+                (progress.message ? '<div style="font-size: 0.6rem; color: var(--text-light); margin-top: 0.2rem;">' + progress.message + '</div>' : '') +
+            '</div>';
+        }
+
         let detailHtml = '';
         if (status === 'completed' && result.name) {
-            detailHtml = '<div class="task-detail" id="detail_' + taskId + '">' +
-                '<div class="task-detail-row"><span class="label">趋势</span><span>' + (result.trend_prediction || '-') + '</span></div>' +
-                (result.analysis_summary ? '<div class="task-detail-summary">' + result.analysis_summary.substring(0, 100) + '...</div>' : '') +
-                '</div>';
+            let sections = [];
+
+            // 核心结论
+            if (result.operation_advice) {
+                sections.push('<div class="task-detail-row"><span class="label">操作建议</span><span>' + result.operation_advice + '</span></div>');
+            }
+            if (result.trend_prediction) {
+                sections.push('<div class="task-detail-row"><span class="label">趋势预测</span><span>' + result.trend_prediction + '</span></div>');
+            }
+
+            // 综合摘要
+            if (result.analysis_summary) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #f0fdf4; border-radius: 0.25rem;"><strong style="color: #166534;">📋 综合摘要</strong><div style="margin-top: 0.3rem; line-height: 1.6;">' + result.analysis_summary + '</div></div>');
+            }
+
+            // 技术面分析
+            if (result.technical_analysis) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #eff6ff; border-radius: 0.25rem;"><strong style="color: #1e40af;">📈 技术面</strong><div style="margin-top: 0.3rem; line-height: 1.6; white-space: pre-wrap;">' + result.technical_analysis + '</div></div>');
+            }
+
+            // 基本面分析
+            if (result.fundamental_analysis) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #fefce8; border-radius: 0.25rem;"><strong style="color: #854d0e;">🏢 基本面</strong><div style="margin-top: 0.3rem; line-height: 1.6; white-space: pre-wrap;">' + result.fundamental_analysis + '</div></div>');
+            }
+
+            // 舆情情报
+            if (result.news_summary || result.market_sentiment) {
+                let newsContent = result.news_summary || result.market_sentiment || '';
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #fdf2f8; border-radius: 0.25rem;"><strong style="color: #9f1239;">📰 舆情情报</strong><div style="margin-top: 0.3rem; line-height: 1.6; white-space: pre-wrap;">' + newsContent + '</div></div>');
+            }
+
+            // 风险提示
+            if (result.risk_warning) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #fef2f2; border-radius: 0.25rem;"><strong style="color: #991b1b;">⚠️ 风险提示</strong><div style="margin-top: 0.3rem; line-height: 1.6;">' + result.risk_warning + '</div></div>');
+            }
+
+            // 买入理由
+            if (result.buy_reason) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #f0fdf4; border-radius: 0.25rem;"><strong style="color: #166534;">✅ 买入理由</strong><div style="margin-top: 0.3rem; line-height: 1.6;">' + result.buy_reason + '</div></div>');
+            }
+
+            // 关键要点
+            if (result.key_points) {
+                sections.push('<div style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 0.25rem;"><strong style="color: #374151;">🎯 关键要点</strong><div style="margin-top: 0.3rem; line-height: 1.6;">' + result.key_points + '</div></div>');
+            }
+
+            // 完整原始响应（可展开）
+            if (result.raw_response) {
+                sections.push('<div style="margin-top: 0.5rem;"><details><summary style="cursor: pointer; padding: 0.5rem; background: #f3f4f6; border-radius: 0.25rem; font-size: 0.75rem;">📄 查看完整 AI 原始响应</summary><pre style="margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 0.25rem; font-size: 0.7rem; overflow-x: auto; white-space: pre-wrap;" onclick="event.stopPropagation()">' + result.raw_response + '</pre></details></div>');
+            }
+
+            detailHtml = '<div class="task-detail" id="detail_' + taskId + '" style="max-height: 500px; overflow-y: auto;">' + sections.join('') + '</div>';
         }
-        
+
         return '<div class="task-card ' + status + '" id="task_' + taskId + '" onclick="toggleDetail(\\''+taskId+'\\')">' +
             '<div class="task-status">' + statusIcon + '</div>' +
             '<div class="task-main">' +
@@ -744,6 +846,7 @@ def render_config_page(
                     '<span>⏳ ' + calcDuration(task.start_time, task.end_time) + '</span>' +
                     '<span>' + (task.report_type === 'full' ? '📊完整' : '📝精简') + '</span>' +
                 '</div>' +
+                progressHtml +
             '</div>' +
             resultHtml +
             '<div class="task-actions">' +
@@ -849,10 +952,11 @@ def render_config_page(
     // 提交分析
     window.submitAnalysis = function() {
         const code = codeInput.value.trim().toLowerCase();
-        const isAStock = /^\d{6}$/.test(code);
-        const isHKStock = /^hk\d{5}$/.test(code);
-        
-        if (!(isAStock || isHKStock)) {
+        const isAStock = /^\d{6}$/.test(code);           // A股: 600519
+        const isHKStockWithPrefix = /^hk\d{1,5}$/.test(code);  // 港股带前缀: hk700, hk1810, hk00700
+        const isHKStockNoPrefix = /^\d{5}$/.test(code);   // 港股无前缀: 00700, 01810
+
+        if (!(isAStock || isHKStockWithPrefix || isHKStockNoPrefix)) {
             return;
         }
         

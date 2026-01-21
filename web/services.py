@@ -215,17 +215,35 @@ class AnalysisService:
         tasks.sort(key=lambda x: x.get('start_time', ''), reverse=True)
         return tasks[:limit]
     
+    def _update_task_progress(
+        self,
+        task_id: str,
+        step: str,
+        step_name: str,
+        percent: int,
+        message: str
+    ) -> None:
+        """更新任务进度"""
+        with self._tasks_lock:
+            if task_id in self._tasks:
+                self._tasks[task_id]["progress"] = {
+                    "step": step,
+                    "step_name": step_name,
+                    "percent": percent,
+                    "message": message
+                }
+
     def _run_analysis(
-        self, 
-        code: str, 
-        task_id: str, 
+        self,
+        code: str,
+        task_id: str,
         report_type: ReportType = ReportType.SIMPLE
     ) -> Dict[str, Any]:
         """
         执行单只股票分析
-        
+
         内部方法，在线程池中运行
-        
+
         Args:
             code: 股票代码
             task_id: 任务ID
@@ -240,20 +258,35 @@ class AnalysisService:
                 "start_time": datetime.now().isoformat(),
                 "result": None,
                 "error": None,
-                "report_type": report_type.value
+                "report_type": report_type.value,
+                "progress": {
+                    "step": "pending",
+                    "step_name": "等待开始",
+                    "percent": 0,
+                    "message": "任务已创建，等待执行"
+                }
             }
-        
+
         try:
             # 延迟导入避免循环依赖
             from config import get_config
             from main import StockAnalysisPipeline
-            
+
             logger.info(f"[AnalysisService] 开始分析股票: {code}")
-            
+
+            # 步骤1: 获取数据
+            self._update_task_progress(task_id, "fetching", "获取行情数据", 20, "正在获取股票行情和筹码分布...")
+
             # 创建分析管道
             config = get_config()
             pipeline = StockAnalysisPipeline(config=config, max_workers=1)
-            
+
+            # 步骤2: 搜索新闻
+            self._update_task_progress(task_id, "searching", "搜索相关新闻", 40, "正在搜索股票相关新闻和舆情...")
+
+            # 步骤3: AI分析
+            self._update_task_progress(task_id, "analyzing", "AI智能分析", 60, "正在进行AI智能分析，请耐心等待...")
+
             # 执行单只股票分析（启用单股推送）
             result = pipeline.process_single_stock(
                 code=code,
@@ -261,6 +294,9 @@ class AnalysisService:
                 single_stock_notify=True,
                 report_type=report_type
             )
+
+            # 步骤4: 完成
+            self._update_task_progress(task_id, "completing", "生成报告", 90, "正在生成分析报告...")
             
             if result:
                 result_data = {
@@ -270,15 +306,33 @@ class AnalysisService:
                     "operation_advice": result.operation_advice,
                     "trend_prediction": result.trend_prediction,
                     "analysis_summary": result.analysis_summary,
+                    # 完整响应
+                    "raw_response": getattr(result, 'raw_response', ''),
+                    # 决策仪表盘
+                    "dashboard": result.dashboard,
+                    # 详细分析
+                    "technical_analysis": result.technical_analysis,
+                    "fundamental_analysis": result.fundamental_analysis,
+                    "news_summary": result.news_summary,
+                    "market_sentiment": result.market_sentiment,
+                    "risk_warning": result.risk_warning,
+                    "buy_reason": result.buy_reason,
+                    "key_points": result.key_points,
                 }
-                
+
                 with self._tasks_lock:
                     self._tasks[task_id].update({
                         "status": "completed",
                         "end_time": datetime.now().isoformat(),
-                        "result": result_data
+                        "result": result_data,
+                        "progress": {
+                            "step": "completed",
+                            "step_name": "分析完成",
+                            "percent": 100,
+                            "message": "分析完成！"
+                        }
                     })
-                
+
                 logger.info(f"[AnalysisService] 股票 {code} 分析完成: {result.operation_advice}")
                 return {"success": True, "task_id": task_id, "result": result_data}
             else:
@@ -286,7 +340,13 @@ class AnalysisService:
                     self._tasks[task_id].update({
                         "status": "failed",
                         "end_time": datetime.now().isoformat(),
-                        "error": "分析返回空结果"
+                        "error": "分析返回空结果",
+                        "progress": {
+                            "step": "failed",
+                            "step_name": "分析失败",
+                            "percent": 0,
+                            "message": "分析返回空结果"
+                        }
                     })
                 
                 logger.warning(f"[AnalysisService] 股票 {code} 分析失败: 返回空结果")
