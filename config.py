@@ -129,6 +129,33 @@ class Config:
     # 单例实例存储
     _instance: Optional['Config'] = None
     
+    @staticmethod
+    def _load_from_file(filename: str) -> List[str]:
+        """
+        从文本文件加载配置列表
+        
+        Args:
+            filename: 配置文件名（相对于项目根目录）
+        
+        Returns:
+            配置项列表（去除注释和空行）
+        """
+        file_path = Path(__file__).parent / filename
+        if not file_path.exists():
+            return []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = [
+                    line.strip() 
+                    for line in f.readlines() 
+                    if line.strip() and not line.strip().startswith('#')
+                ]
+            return lines
+        except Exception as e:
+            print(f"警告：读取配置文件 {filename} 失败: {e}")
+            return []
+    
     @classmethod
     def get_instance(cls) -> 'Config':
         """
@@ -151,13 +178,15 @@ class Config:
         加载优先级：
         1. 系统环境变量
         2. .env 文件
-        3. 代码中的默认值
+        3. 配置文件（stocks.txt, email_receivers.txt）
+        4. 代码中的默认值
         """
         # 加载项目根目录下的 .env 文件
         env_path = Path(__file__).parent / '.env'
         load_dotenv(dotenv_path=env_path)
         
-        # 解析自选股列表（逗号分隔）
+        # 解析自选股列表
+        # 优先级：环境变量 > stocks.txt > 默认值
         stock_list_str = os.getenv('STOCK_LIST', '')
         stock_list = [
             code.strip() 
@@ -165,7 +194,11 @@ class Config:
             if code.strip()
         ]
         
-        # 如果没有配置，使用默认的示例股票
+        # 如果环境变量未配置，尝试从 stocks.txt 读取
+        if not stock_list:
+            stock_list = cls._load_from_file('stocks.txt')
+        
+        # 如果仍未配置，使用默认的示例股票
         if not stock_list:
             stock_list = ['600519', '000001', '300750']
         
@@ -178,6 +211,15 @@ class Config:
         
         serpapi_keys_str = os.getenv('SERPAPI_API_KEYS', '')
         serpapi_keys = [k.strip() for k in serpapi_keys_str.split(',') if k.strip()]
+        
+        # 解析邮件接收人列表
+        # 优先级：环境变量 > email_receivers.txt
+        email_receivers_str = os.getenv('EMAIL_RECEIVERS', '')
+        email_receivers = [r.strip() for r in email_receivers_str.split(',') if r.strip()]
+        
+        # 如果环境变量未配置，尝试从 email_receivers.txt 读取
+        if not email_receivers:
+            email_receivers = cls._load_from_file('email_receivers.txt')
         
         return cls(
             stock_list=stock_list,
@@ -203,7 +245,7 @@ class Config:
             telegram_chat_id=os.getenv('TELEGRAM_CHAT_ID'),
             email_sender=os.getenv('EMAIL_SENDER'),
             email_password=os.getenv('EMAIL_PASSWORD'),
-            email_receivers=[r.strip() for r in os.getenv('EMAIL_RECEIVERS', '').split(',') if r.strip()],
+            email_receivers=email_receivers,
             pushover_user_key=os.getenv('PUSHOVER_USER_KEY'),
             pushover_api_token=os.getenv('PUSHOVER_API_TOKEN'),
             custom_webhook_urls=[u.strip() for u in os.getenv('CUSTOM_WEBHOOK_URLS', '').split(',') if u.strip()],
@@ -233,26 +275,33 @@ class Config:
         """
         热读取 STOCK_LIST 环境变量并更新配置中的自选股列表
         
-        支持两种配置方式：
-        1. .env 文件（本地开发、定时任务模式） - 修改后下次执行自动生效
-        2. 系统环境变量（GitHub Actions、Docker） - 启动时固定，运行中不变
+        支持三种配置方式（优先级从高到低）：
+        1. 系统环境变量（GitHub Actions、Docker）
+        2. .env 文件（本地开发、定时任务模式）
+        3. stocks.txt 文件（最便捷的方式）
         """
-        # 若 .env 中配置了 STOCK_LIST，则以 .env 为准；否则回退到系统环境变量
-        env_path = Path(__file__).parent / '.env'
-        stock_list_str = ''
-        if env_path.exists():
-            env_values = dotenv_values(env_path)
-            stock_list_str = (env_values.get('STOCK_LIST') or '').strip()
-
+        # 优先读取系统环境变量
+        stock_list_str = os.getenv('STOCK_LIST', '').strip()
+        
+        # 若系统环境变量未配置，尝试从 .env 读取
         if not stock_list_str:
-            stock_list_str = os.getenv('STOCK_LIST', '')
-
+            env_path = Path(__file__).parent / '.env'
+            if env_path.exists():
+                env_values = dotenv_values(env_path)
+                stock_list_str = (env_values.get('STOCK_LIST') or '').strip()
+        
+        # 解析逗号分隔的股票列表
         stock_list = [
             code.strip()
             for code in stock_list_str.split(',')
             if code.strip()
         ]
-
+        
+        # 如果仍未配置，从 stocks.txt 读取
+        if not stock_list:
+            stock_list = self._load_from_file('stocks.txt')
+        
+        # 最后的兜底默认值
         if not stock_list:        
             stock_list = ['000001']
 

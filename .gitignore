@@ -5,6 +5,9 @@
 *.env.local
 .env.*.local
 
+# 配置文件（可选：如果包含私人邮箱，可以取消下面的注释）
+# email_receivers.txt
+
 # 测试文件（可能包含敏感配置）
 test_*.py
 !test_env.py

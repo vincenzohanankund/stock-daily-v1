@@ -44,7 +44,38 @@
 
 点击右上角 `Fork` 按钮
 
-#### 2. 配置 Secrets
+#### 2. 配置自选股和邮件接收人（推荐方式）
+
+**方式一：使用配置文件（推荐）** ⭐
+
+直接编辑仓库中的配置文件，无需修改 Secrets：
+
+1. 编辑 `stocks.txt` - 自选股列表（每行一个股票代码）
+2. 编辑 `email_receivers.txt` - 邮件接收人（每行一个邮箱，可选）
+3. 提交到仓库即可
+
+```bash
+# stocks.txt 示例
+600519
+000001
+300750
+
+# email_receivers.txt 示例
+user1@example.com
+user2@example.com
+```
+
+> 📖 详细说明请参考 [配置文件使用指南](CONFIG_FILES.md)
+
+**方式二：使用 Secrets（传统方式）**
+
+如果你更习惯使用 Secrets，也可以继续使用：
+- `STOCK_LIST`: 自选股代码，如 `600519,300750,002594`
+- `EMAIL_RECEIVERS`: 收件人邮箱（多个用逗号分隔）
+
+> 注：Secrets 优先级高于配置文件
+
+#### 3. 配置 API Keys
 
 进入你 Fork 的仓库 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
 
@@ -69,7 +100,6 @@
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
 | `EMAIL_SENDER` | 发件人邮箱（如 `xxx@qq.com`） | 可选 |
 | `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
-| `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔，留空则发给自己） | 可选 |
 | `CUSTOM_WEBHOOK_URLS` | 自定义 Webhook（支持钉钉等，多个用逗号分隔） | 可选 |
 | `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定义 Webhook 的 Bearer Token（用于需要认证的 Webhook） | 可选 |
 | `SINGLE_STOCK_NOTIFY` | 单股推送模式：设为 `true` 则每分析完一只股票立即推送 | 可选 |
@@ -78,25 +108,24 @@
 >
 > 📖 更多配置（Pushover 手机推送、飞书云文档等）请参考 [完整配置指南](docs/full-guide.md)
 
-**其他配置**
+**搜索引擎配置（可选）**
 
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
-| `STOCK_LIST` | 自选股代码，如 `600519,300750,002594` | ✅ |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) 搜索 API（新闻搜索） | 推荐 |
 | `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索优化，支持AI摘要，多个key用逗号分隔） | 可选 |
 | `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/) 备用搜索 | 可选 |
 | `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/) Token | 可选 |
 
-#### 3. 启用 Actions
+#### 4. 启用 Actions
 
 进入 `Actions` 标签 → 点击 `I understand my workflows, go ahead and enable them`
 
-#### 4. 手动测试
+#### 5. 手动测试
 
 `Actions` → `每日股票分析` → `Run workflow` → 选择模式 → `Run workflow`
 
-#### 5. 完成！
+#### 6. 完成！
 
 默认每个工作日 **18:00（北京时间）** 自动执行
 

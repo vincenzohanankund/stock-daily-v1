@@ -26,6 +26,28 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
       
+      - name: 显示配置信息
+        run: |
+          echo "=========================================="
+          echo "配置文件检查"
+          echo "=========================================="
+          if [ -f "stocks.txt" ]; then
+            echo "✅ stocks.txt 存在"
+            echo "自选股列表:"
+            cat stocks.txt | grep -v '^#' | grep -v '^$' || echo "  (空)"
+          else
+            echo "⚠️  stocks.txt 不存在，将使用环境变量或默认值"
+          fi
+          
+          if [ -f "email_receivers.txt" ]; then
+            echo "✅ email_receivers.txt 存在"
+            echo "邮件接收人:"
+            cat email_receivers.txt | grep -v '^#' | grep -v '^$' || echo "  (空，将发送给发件人)"
+          else
+            echo "⚠️  email_receivers.txt 不存在，将使用环境变量或发送给发件人"
+          fi
+          echo "=========================================="
+      
       - name: 设置 Python 环境
         uses: actions/setup-python@v5
         with:
@@ -73,7 +95,7 @@ jobs:
           # 方式四：邮件（只需邮箱和授权码，SMTP自动识别）
           EMAIL_SENDER: ${{ vars.EMAIL_SENDER || secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECEIVERS: ${{ vars.EMAIL_RECEIVERS || secrets.EMAIL_RECEIVERS }}
+          # EMAIL_RECEIVERS 已改用 email_receivers.txt 配置，无需在此设置
           # 方式五：自定义 Webhook（支持钉钉、Discord、Slack、Bark等，多个用逗号分隔）
           CUSTOM_WEBHOOK_URLS: ${{ secrets.CUSTOM_WEBHOOK_URLS }}
           CUSTOM_WEBHOOK_BEARER_TOKEN: ${{ secrets.CUSTOM_WEBHOOK_BEARER_TOKEN }}
@@ -83,8 +105,8 @@ jobs:
           FEISHU_FOLDER_TOKEN: ${{ secrets.FEISHU_FOLDER_TOKEN }}
 
           
-          # 自选股列表 (从 secrets 或使用默认值)
-          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519' }}
+          # 自选股列表（已改用 stocks.txt 配置，无需在此设置）
+          # STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519' }}
           
           # 其他配置
           LOG_LEVEL: INFO
@@ -96,10 +118,8 @@ jobs:
           
           echo "=========================================="
           echo "运行模式: $MODE"
-          echo "自选股: $STOCK_LIST"
           echo "时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
           echo "BOCHA_API_KEYS 是否配置: $([ -n "$BOCHA_API_KEYS" ] && echo '是' || echo '否')"
-          echo "BOCHA_API_KEYS 长度: ${#BOCHA_API_KEYS}"
           echo "=========================================="
           
           if [ "$MODE" = "market-only" ]; then
