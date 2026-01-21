@@ -4,5 +4,7 @@
 # 如果文件为空或不存在，则发送给发件人自己
 
 # 示例：
+huchengguang1@kingsoft.com
+qikachu1996@gmail.com
 # user1@example.com
 # user2@example.com
