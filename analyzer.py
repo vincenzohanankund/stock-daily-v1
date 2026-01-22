@@ -25,6 +25,7 @@ from tenacity import (
 )
 
 from config import get_config
+from stock_name_service import get_stock_name
 
 logger = logging.getLogger(__name__)
 
@@ -707,8 +708,8 @@ class GeminiAnalyzer:
             if 'realtime' in context and context['realtime'].get('name'):
                 name = context['realtime']['name']
             else:
-                # 最后从映射表获取
-                name = STOCK_NAME_MAP.get(code, f'股票{code}')
+                # 最后从缓存服务获取（支持批量加载的 5000+ 股票）
+                name = get_stock_name(code)
         
         # 如果模型不可用，返回默认结果
         if not self.is_available():
@@ -812,7 +813,7 @@ class GeminiAnalyzer:
         # 优先使用上下文中的股票名称（从 realtime_quote 获取）
         stock_name = context.get('stock_name', name)
         if not stock_name or stock_name == f'股票{code}':
-            stock_name = STOCK_NAME_MAP.get(code, f'股票{code}')
+            stock_name = get_stock_name(code)
             
         today = context.get('today', {})
         

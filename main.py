@@ -244,11 +244,6 @@ class StockAnalysisPipeline:
             try:
                 realtime_quote = self.akshare_fetcher.get_realtime_quote(code)
                 if realtime_quote:
-                    # 如果实时行情返回了名称，更新股票名称（更精确）
-                    if realtime_quote.name:
-                        stock_name = realtime_quote.name
-                        # 同时更新缓存
-                        self.stock_name_service._name_cache[code] = realtime_quote.name
                     logger.info(f"[{code}] {stock_name} 实时行情: 价格={realtime_quote.price}, "
                               f"量比={realtime_quote.volume_ratio}, 换手率={realtime_quote.turnover_rate}%")
             except Exception as e:
@@ -913,14 +908,23 @@ def main() -> int:
     # === 启动 WebUI (如果启用) ===
     # 优先级: 命令行参数 > 配置文件
     start_webui = (args.webui or args.webui_only or config.webui_enabled) and os.getenv("GITHUB_ACTIONS") != "true"
-    
+
     if start_webui:
         try:
             from webui import run_server_in_thread
             run_server_in_thread(host=config.webui_host, port=config.webui_port)
         except Exception as e:
             logger.error(f"启动 WebUI 失败: {e}")
-    
+
+        # 预加载股票名称服务（批量加载 5000+ 股票）
+        try:
+            logger.info("预加载股票名称服务...")
+            from stock_name_service import get_stock_name_service
+            service = get_stock_name_service()
+            logger.info(f"股票名称服务预加载完成，缓存 {len(service._name_cache)} 个股票")
+        except Exception as e:
+            logger.warning(f"股票名称服务预加载失败: {e}，将在首次使用时加载")
+
     # === 仅 WebUI 模式：不自动执行分析 ===
     if args.webui_only:
         logger.info("模式: 仅 WebUI 服务")
