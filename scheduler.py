@@ -18,7 +18,7 @@ import signal
 import sys
 import time
 import threading
-from datetime import datetime
+from datetime import datetime,date
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,7 @@ class Scheduler:
             raise ImportError("请安装 schedule 库: pip install schedule")
         
         self.schedule_time = schedule_time
+        self.schedule_weekdays = schedule_weekdays  # ← 新增
         self.shutdown_handler = GracefulShutdown()
         self._task_callback: Optional[Callable] = None
         self._running = False
@@ -94,13 +95,22 @@ class Scheduler:
         
         # 设置每日定时任务
         self.schedule.every().day.at(self.schedule_time).do(self._safe_run_task)
-        logger.info(f"已设置每日定时任务，执行时间: {self.schedule_time}")
+        logger.info(f"已设置定时任务，执行时间: 每周{self.schedule_weekdays}@{self.schedule_time}")
         
         if run_immediately:
             logger.info("立即执行一次任务...")
             self._safe_run_task()
     
     def _safe_run_task(self):
+         # ↓↓↓ 新增：工作日过滤 ↓↓↓
+        weekday = date.today().isoweekday()          # 1-7
+        # 注意 schedule_weekdays 是字符串，例 "1,2,3,4,5"
+        allow_days = getattr(self, 'schedule_weekdays', '')   # 从 config 传进来
+        logger.info(f"准备执行任务，执行时间列表：每周 {allow_days}")
+        if allow_days and str(weekday) not in allow_days.split(","):
+            logger.info(f"今天 Weekday={weekday}，不在执行列表 {allow_days}，跳过本次任务")
+            return
+        # ↑↑↑ 新增结束 ↑↑↑
         """安全执行任务（带异常捕获）"""
         if self._task_callback is None:
             return
@@ -163,7 +173,7 @@ def run_with_schedule(
         schedule_time: 每日执行时间
         run_immediately: 是否立即执行一次
     """
-    scheduler = Scheduler(schedule_time=schedule_time)
+    scheduler = Scheduler(schedule_time=schedule_time,schedule_weekdays=schedule_weekdays)
     scheduler.set_daily_task(task, run_immediately=run_immediately)
     scheduler.run()
 
@@ -181,4 +191,4 @@ if __name__ == "__main__":
         print("任务完成!")
     
     print("启动测试调度器（按 Ctrl+C 退出）")
-    run_with_schedule(test_task, schedule_time="23:59", run_immediately=True)
+    run_with_schedule(test_task, schedule_time="23:59", schedule_weekdays="2,3", run_immediately=True)
