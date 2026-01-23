@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Web 服务模块
+Web 服務模塊
 ===================================
 
-分层架构：
-- server.py    - HTTP 服务器核心
-- router.py    - 路由分发
-- handlers.py  - 请求处理器
-- services.py  - 业务服务层
+分層架構：
+- server.py    - HTTP 服務器核心
+- router.py    - 路由分發
+- handlers.py  - 請求處理器
+- services.py  - 業務服務層
 - templates.py - HTML 模板
 
 使用方式：
     from web import run_server_in_thread, WebServer
     
-    # 后台启动
+    # 後臺啟動
     run_server_in_thread(host="127.0.0.1", port=8000)
     
-    # 前台启动
+    # 前臺啟動
     server = WebServer(host="127.0.0.1", port=8000)
     server.run()
 """

@@ -1,4 +1,4 @@
-# 📈 A股智能分析系统
+# 📈 台股智能分析系統
 
 [![GitHub stars](https://img.shields.io/github/stars/ZhuLinsen/daily_stock_analysis?style=social)](https://github.com/ZhuLinsen/daily_stock_analysis/stargazers)
 [![CI](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml)
@@ -6,254 +6,258 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-> 🤖 基于 AI 大模型的 A/H 股自选股智能分析系统，每日自动分析并推送「决策仪表盘」到企业微信/飞书/Telegram/邮箱
+> 🤖 基於 AI 大模型的台股自選股智能分析系統，每日自動分析並推送「決策儀表盤」到企業微信/飛書/Telegram/郵箱
+>
+> 🇹🇼 **台股專用版** - 優先支援台股（.TW），同時兼容港股（.HK）、A股、美股等國際市場
 
-![运行效果演示](./sources/all_2026-01-13_221547.gif)
+![運行效果演示](./sources/all_2026-01-13_221547.gif)
 
 ## ✨ 功能特性
 
 ### 🎯 核心功能
-- **AI 决策仪表盘** - 一句话核心结论 + 精确买卖点位 + 检查清单
-- **多维度分析** - 技术面 + 筹码分布 + 舆情情报 + 实时行情
-- **大盘复盘** - 每日市场概览、板块涨跌、北向资金
-- **多渠道推送** - 支持企业微信、飞书、Telegram、邮件（自动识别）
-- **零成本部署** - GitHub Actions 免费运行，无需服务器
-- **💰 白嫖 Gemini API** - Google AI Studio 提供免费额度，个人使用完全够用
-- **🔄 多模型支持** - 支持 OpenAI 兼容 API（DeepSeek、通义千问等）作为备选
+- **AI 決策儀表盤** - 一句話核心結論 + 精確買賣點位 + 檢查清單
+- **多維度分析** - 技術面 + 籌碼分佈 + 輿情情報 + 實時行情
+- **大盤覆盤** - 每日市場概覽、產業板塊漲跌、外資動向
+- **多渠道推送** - 支持企業微信、飛書、Telegram、郵件（自動識別）
+- **零成本部署** - GitHub Actions 免費運行，無需服務器
+- **💰 白嫖 Gemini API** - Google AI Studio 提供免費額度，個人使用完全夠用
+- **🔄 多模型支持** - 支持 OpenAI 兼容 API（DeepSeek、通義千問等）作為備選
 
-### 📊 数据来源
-- **行情数据**: AkShare（免费）、Tushare、Baostock、YFinance
-- **新闻搜索**: Tavily、SerpAPI、Bocha
-- **AI 分析**: 
-  - 主力：Google Gemini（gemini-3-flash-preview）—— [免费获取](https://aistudio.google.com/)
-  - 备选：应大家要求，也支持了OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等）
+### 📊 數據來源
+- **行情數據**:
+  - 🏆 **首選**: Yahoo Finance（YFinance）- 台股、港股、美股主力數據源
+  - 備選：AkShare（A股）、Tushare（A股）、Baostock（A股）
+- **新聞搜索**: Tavily、SerpAPI、Bocha
+- **AI 分析**:
+  - 主力：Google Gemini（gemini-3-flash-preview）—— [免費獲取](https://aistudio.google.com/)
+  - 備選：應大家要求，也支持了OpenAI 兼容 API（DeepSeek、通義千問、Moonshot 等）
 
-### 🛡️ 交易理念内置
-- ❌ **严禁追高** - 乖离率 > 5% 自动标记「危险」
-- ✅ **趋势交易** - MA5 > MA10 > MA20 多头排列
-- 📍 **精确点位** - 买入价、止损价、目标价
-- 📋 **检查清单** - 每项条件用 ✅⚠️❌ 标记
+### 🛡️ 交易理念內置
+- ❌ **嚴禁追高** - 乖離率 > 5% 自動標記「危險」
+- ✅ **趨勢交易** - MA5 > MA10 > MA20 多頭排列
+- 📍 **精確點位** - 買入價、止損價、目標價
+- 📋 **檢查清單** - 每項條件用 ✅⚠️❌ 標記
 
-## 🚀 快速开始
+## 🚀 快速開始
 
-### 方式一：GitHub Actions（推荐，零成本）
+### 方式一：GitHub Actions（推薦，零成本）
 
-**无需服务器，每天自动运行！**
+**無需服務器，每天自動運行！**
 
-#### 1. Fork 本仓库(顺便点下⭐呀)
+#### 1. Fork 本倉庫(順便點下⭐呀)
 
-点击右上角 `Fork` 按钮
+點擊右上角 `Fork` 按鈕
 
 #### 2. 配置 Secrets
 
-进入你 Fork 的仓库 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+進入你 Fork 的倉庫 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
 
-**AI 模型配置（二选一）**
+**AI 模型配置（二選一）**
 
-| Secret 名称 | 说明 | 必填 |
+| Secret 名稱 | 說明 | 必填 |
 |------------|------|:----:|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/) 获取免费 Key | ✅* |
-| `OPENAI_API_KEY` | OpenAI 兼容 API Key（支持 DeepSeek、通义千问等） | 可选 |
-| `OPENAI_BASE_URL` | OpenAI 兼容 API 地址（如 `https://api.deepseek.com/v1`） | 可选 |
-| `OPENAI_MODEL` | 模型名称（如 `deepseek-chat`） | 可选 |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/) 獲取免費 Key | ✅* |
+| `OPENAI_API_KEY` | OpenAI 兼容 API Key（支持 DeepSeek、通義千問等） | 可選 |
+| `OPENAI_BASE_URL` | OpenAI 兼容 API 地址（如 `https://api.deepseek.com/v1`） | 可選 |
+| `OPENAI_MODEL` | 模型名稱（如 `deepseek-chat`） | 可選 |
 
-> *注：`GEMINI_API_KEY` 和 `OPENAI_API_KEY` 至少配置一个
+> *注：`GEMINI_API_KEY` 和 `OPENAI_API_KEY` 至少配置一個
 
-**通知渠道配置（可同时配置多个，全部推送）**
+**通知渠道配置（可同時配置多個，全部推送）**
 
-| Secret 名称 | 说明 | 必填 |
+| Secret 名稱 | 說明 | 必填 |
 |------------|------|:----:|
-| `WECHAT_WEBHOOK_URL` | 企业微信 Webhook URL | 可选 |
-| `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | 可选 |
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） | 可选 |
-| `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
-| `EMAIL_SENDER` | 发件人邮箱（如 `xxx@qq.com`） | 可选 |
-| `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
-| `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔，留空则发给自己） | 可选 |
-| `CUSTOM_WEBHOOK_URLS` | 自定义 Webhook（支持钉钉等，多个用逗号分隔） | 可选 |
-| `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定义 Webhook 的 Bearer Token（用于需要认证的 Webhook） | 可选 |
-| `SINGLE_STOCK_NOTIFY` | 单股推送模式：设为 `true` 则每分析完一只股票立即推送 | 可选 |
+| `WECHAT_WEBHOOK_URL` | 企業微信 Webhook URL | 可選 |
+| `FEISHU_WEBHOOK_URL` | 飛書 Webhook URL | 可選 |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 獲取） | 可選 |
+| `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可選 |
+| `EMAIL_SENDER` | 發件人郵箱（如 `xxx@qq.com`） | 可選 |
+| `EMAIL_PASSWORD` | 郵箱授權碼（非登錄密碼） | 可選 |
+| `EMAIL_RECEIVERS` | 收件人郵箱（多個用逗號分隔，留空則發給自己） | 可選 |
+| `CUSTOM_WEBHOOK_URLS` | 自定義 Webhook（支持釘釘等，多個用逗號分隔） | 可選 |
+| `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定義 Webhook 的 Bearer Token（用於需要認證的 Webhook） | 可選 |
+| `SINGLE_STOCK_NOTIFY` | 單股推送模式：設為 `true` 則每分析完一隻股票立即推送 | 可選 |
 
-> *注：至少配置一个渠道，配置多个则同时推送
+> *注：至少配置一個渠道，配置多個則同時推送
 >
-> 📖 更多配置（Pushover 手机推送、飞书云文档等）请参考 [完整配置指南](docs/full-guide.md)
+> 📖 更多配置（Pushover 手機推送、飛書雲文檔等）請參考 [完整配置指南](docs/full-guide.md)
 
 **其他配置**
 
-| Secret 名称 | 说明 | 必填 |
+| Secret 名稱 | 說明 | 必填 |
 |------------|------|:----:|
-| `STOCK_LIST` | 自选股代码，如 `600519,300750,002594` | ✅ |
-| `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) 搜索 API（新闻搜索） | 推荐 |
-| `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索优化，支持AI摘要，多个key用逗号分隔） | 可选 |
-| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/) 备用搜索 | 可选 |
-| `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/) Token | 可选 |
+| `STOCK_LIST` | 自選股代碼，如 `2330.TW,2317.TW,2454.TW`（台積電、鴻海、聯發科） | ✅ |
+| `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) 搜索 API（新聞搜索） | 推薦 |
+| `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索優化，支持AI摘要，多個key用逗號分隔） | 可選 |
+| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/) 備用搜索 | 可選 |
+| `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/) Token | 可選 |
 
-#### 3. 启用 Actions
+#### 3. 啟用 Actions
 
-进入 `Actions` 标签 → 点击 `I understand my workflows, go ahead and enable them`
+進入 `Actions` 標籤 → 點擊 `I understand my workflows, go ahead and enable them`
 
-#### 4. 手动测试
+#### 4. 手動測試
 
-`Actions` → `每日股票分析` → `Run workflow` → 选择模式 → `Run workflow`
+`Actions` → `每日股票分析` → `Run workflow` → 選擇模式 → `Run workflow`
 
 #### 5. 完成！
 
-默认每个工作日 **18:00（北京时间）** 自动执行
+默認每個工作日 **18:00（北京時間）** 自動執行
 
-### 方式二：本地运行 / Docker 部署
+### 方式二：本地運行 / Docker 部署
 
-> 📖 本地运行、Docker 部署详细步骤请参考 [完整配置指南](docs/full-guide.md)
+> 📖 本地運行、Docker 部署詳細步驟請參考 [完整配置指南](docs/full-guide.md)
 
 ## 📱 推送效果
 
-### 决策仪表盘
+### 決策儀表盤
 ```
-📊 2026-01-10 决策仪表盘
-3只股票 | 🟢买入:1 🟡观望:2 🔴卖出:0
+📊 2026-01-10 決策儀表盤
+3只股票 | 🟢買入:1 🟡觀望:2 🔴賣出:0
 
-🟢 买入 | 贵州茅台(600519)
-📌 缩量回踩MA5支撑，乖离率1.2%处于最佳买点
-💰 狙击: 买入1800 | 止损1750 | 目标1900
-✅多头排列 ✅乖离安全 ✅量能配合
+🟢 買入 | 台積電(2330.TW)
+📌 縮量回踩MA5支撐，乖離率1.2%處於最佳買點
+💰 狙擊: 買入580 | 止損565 | 目標620
+✅多頭排列 ✅乖離安全 ✅量能配合
 
-🟡 观望 | 宁德时代(300750)
-📌 乖离率7.8%超过5%警戒线，严禁追高
-⚠️ 等待回调至MA5附近再考虑
+🟡 觀望 | 聯發科(2454.TW)
+📌 乖離率7.8%超過5%警戒線，嚴禁追高
+⚠️ 等待回調至MA5附近再考慮
 
 ---
-生成时间: 18:00
+生成時間: 18:00
 ```
 
-### 大盘复盘
+### 大盤覆盤
 
-![大盘复盘推送效果](./sources/dapan_2026-01-13_22-14-52.png)
+![大盤覆盤推送效果](./sources/dapan_2026-01-13_22-14-52.png)
 
 ```
-🎯 2026-01-10 大盘复盘
+🎯 2026-01-10 大盤覆盤
 
-📊 主要指数
-- 上证指数: 3250.12 (🟢+0.85%)
-- 深证成指: 10521.36 (🟢+1.02%)
-- 创业板指: 2156.78 (🟢+1.35%)
+📊 主要指數
+- 加權指數: 18520.35 (🟢+0.85%)
+- 櫃買指數: 215.67 (🟢+1.02%)
+- 電子指數: 892.45 (🟢+1.35%)
 
-📈 市场概况
-上涨: 3920 | 下跌: 1349 | 涨停: 155 | 跌停: 3
+📈 市場概況
+上漲: 1250 | 下跌: 582 | 漲停: 45 | 跌停: 8
 
-🔥 板块表现
-领涨: 互联网服务、文化传媒、小金属
-领跌: 保险、航空机场、光伏设备
+🔥 產業表現
+領漲: 半導體、AI伺服器、電動車
+領跌: 航運、金融保險、傳產食品
 ```
 
-## ⚙️ 配置说明
+## ⚙️ 配置說明
 
-> 📖 完整环境变量、定时任务配置请参考 [完整配置指南](docs/full-guide.md)
+> 📖 完整環境變量、定時任務配置請參考 [完整配置指南](docs/full-guide.md)
 
-## 🖥️ 本地 WebUI（可选）
+## 🖥️ 本地 WebUI（可選）
 
-本地运行时，可启用 WebUI 来管理配置和触发分析。
+本地運行時，可啟用 WebUI 來管理配置和觸發分析。
 
-### 启动方式
+### 啟動方式
 
-| 命令 | 说明 |
+| 命令 | 說明 |
 |------|------|
-| `python main.py --webui` | 启动 WebUI + 执行一次完整分析 |
-| `python main.py --webui-only` | 仅启动 WebUI，手动触发分析 |
+| `python main.py --webui` | 啟動 WebUI + 執行一次完整分析 |
+| `python main.py --webui-only` | 僅啟動 WebUI，手動觸發分析 |
 
-- 访问地址：`http://127.0.0.1:8000`
-- 详细说明请参考 [配置指南 - WebUI](docs/full-guide.md#本地-webui-管理界面)
+- 訪問地址：`http://127.0.0.1:8000`
+- 詳細說明請參考 [配置指南 - WebUI](docs/full-guide.md#本地-webui-管理界面)
 
 ### 功能特性
 
-- 📝 **配置管理** - 查看/修改 `.env` 里的自选股列表
-- 🚀 **快速分析** - 页面输入股票代码，一键触发分析
-- 📊 **实时进度** - 分析任务状态实时更新，支持多任务并行
+- 📝 **配置管理** - 查看/修改 `.env` 裡的自選股列表
+- 🚀 **快速分析** - 頁面輸入股票代碼，一鍵觸發分析
+- 📊 **實時進度** - 分析任務狀態實時更新，支持多任務並行
 
 ### API 接口
 
-| 接口 | 方法 | 说明 |
+| 接口 | 方法 | 說明 |
 |------|------|------|
-| `/` | GET | 配置管理页面 |
-| `/health` | GET | 健康检查 |
-| `/analysis?code=xxx` | GET | 触发单只股票异步分析 |
-| `/tasks` | GET | 查询所有任务状态 |
-| `/task?id=xxx` | GET | 查询单个任务状态 |
+| `/` | GET | 配置管理頁面 |
+| `/health` | GET | 健康檢查 |
+| `/analysis?code=xxx` | GET | 觸發單隻股票異步分析 |
+| `/tasks` | GET | 查詢所有任務狀態 |
+| `/task?id=xxx` | GET | 查詢單個任務狀態 |
 
-## 📁 项目结构
+## 📁 項目結構
 
 ```
 daily_stock_analysis/
 ├── main.py              # 主程序入口
 ├── analyzer.py          # AI 分析器（Gemini）
-├── market_analyzer.py   # 大盘复盘分析
-├── search_service.py    # 新闻搜索服务
+├── market_analyzer.py   # 大盤覆盤分析
+├── search_service.py    # 新聞搜索服務
 ├── notification.py      # 消息推送
-├── scheduler.py         # 定时任务
-├── storage.py           # 数据存储
+├── scheduler.py         # 定時任務
+├── storage.py           # 數據存儲
 ├── config.py            # 配置管理
 ├── webui.py             # WebUI 入口
-├── data_provider/       # 数据源适配器
+├── data_provider/       # 數據源適配器
 │   ├── akshare_fetcher.py
 │   ├── tushare_fetcher.py
 │   ├── baostock_fetcher.py
 │   └── yfinance_fetcher.py
-├── web/                 # WebUI 模块
-│   ├── server.py        # HTTP 服务器
+├── web/                 # WebUI 模塊
+│   ├── server.py        # HTTP 服務器
 │   ├── router.py        # 路由管理
-│   ├── handlers.py      # 请求处理器
-│   ├── services.py      # 业务服务
+│   ├── handlers.py      # 請求處理器
+│   ├── services.py      # 業務服務
 │   └── templates.py     # HTML 模板
 ├── .github/workflows/   # GitHub Actions
-├── Dockerfile           # Docker 镜像
-└── docker-compose.yml   # Docker 编排
+├── Dockerfile           # Docker 鏡像
+└── docker-compose.yml   # Docker 編排
 ```
 
 ## 🗺️ Roadmap
 
-> 📢 以下功能将视后续情况逐步完成，如果你有好的想法或建议，欢迎 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues) 讨论！
+> 📢 以下功能將視後續情況逐步完成，如果你有好的想法或建議，歡迎 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues) 討論！
 
-### 🔔 通知渠道扩展
-- [x] 企业微信机器人
-- [x] 飞书机器人
+### 🔔 通知渠道擴展
+- [x] 企業微信機器人
+- [x] 飛書機器人
 - [x] Telegram Bot
-- [x] 邮件通知（SMTP）
-- [x] 自定义 Webhook（支持钉钉、Discord、Slack、Bark 等）
+- [x] 郵件通知（SMTP）
+- [x] 自定義 Webhook（支持釘釘、Discord、Slack、Bark 等）
 - [x] iOS/Android 推送（Pushover）
-- [x] 钉钉机器人 （已支持命令交互 >> [相关配置](docs/bot/dingding-bot-config.md)）
+- [x] 釘釘機器人 （已支持命令交互 >> [相關配置](docs/bot/dingding-bot-config.md)）
 ### 🤖 AI 模型支持
-- [x] Google Gemini（主力，免费额度）
-- [x] OpenAI 兼容 API（支持 GPT-4/DeepSeek/通义千问/Claude/文心一言 等）
+- [x] Google Gemini（主力，免費額度）
+- [x] OpenAI 兼容 API（支持 GPT-4/DeepSeek/通義千問/Claude/文心一言 等）
 - [x] 本地模型（Ollama）
 
-### 📊 数据源扩展
-- [x] AkShare（免费）
+### 📊 數據源擴展
+- [x] AkShare（免費）
 - [x] Tushare Pro
 - [x] Baostock
 - [x] YFinance
 
-### 🎯 功能增强
-- [x] 决策仪表盘
-- [x] 大盘复盘
-- [x] 定时推送
+### 🎯 功能增強
+- [x] 決策儀表盤
+- [x] 大盤覆盤
+- [x] 定時推送
 - [x] GitHub Actions
 - [x] 港股支持
-- [x] Web 管理界面 (简易版)
-- [ ] 历史分析回测
+- [x] Web 管理界面 (簡易版)
+- [ ] 歷史分析回測
 - [ ] 美股支持
 
-## 🤝 贡献
+## 🤝 貢獻
 
-欢迎提交 Issue 和 Pull Request！
+歡迎提交 Issue 和 Pull Request！
 
-详见 [贡献指南](CONTRIBUTING.md)
+詳見 [貢獻指南](CONTRIBUTING.md)
 
 ## 📄 License
 [MIT License](LICENSE) © 2026 ZhuLinsen
 
-如果你在项目中使用或基于本项目进行二次开发，
-非常欢迎在 README 或文档中注明来源并附上本仓库链接。
-这将有助于项目的持续维护和社区发展。
+如果你在項目中使用或基於本項目進行二次開發，
+非常歡迎在 README 或文檔中註明來源並附上本倉庫鏈接。
+這將有助於項目的持續維護和社區發展。
 
-## 📬 联系与合作
+## 📬 聯繫與合作
 - GitHub Issues：[提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
 
 ## ⭐ Star History
@@ -266,20 +270,20 @@ daily_stock_analysis/
  </picture>
 </a>
 
-## ⚠️ 免责声明
+## ⚠️ 免責聲明
 
-本项目仅供学习和研究使用，不构成任何投资建议。股市有风险，投资需谨慎。作者不对使用本项目产生的任何损失负责。
+本項目僅供學習和研究使用，不構成任何投資建議。股市有風險，投資需謹慎。作者不對使用本項目產生的任何損失負責。
 
 ---
 
-**如果觉得有用，请给个 ⭐ Star 支持一下！**
+**如果覺得有用，請給個 ⭐ Star 支持一下！**
 
-<!-- 赞赏锚点 -->
+<!-- 讚賞錨點 -->
 <a id="sponsor"></a>
-###### ☕ 请我喝杯咖啡
-- 如果觉得本项目对你有帮助且行有余力，可以请我喝杯咖啡，支持项目的持续维护与迭代；不赞赏也完全不影响使用。   
-<small>（赞赏时可备注联系方式，方便私信致谢与后续交流反馈）</small>
-- 感谢支持, 祝您股市长虹，拿主力当提款机。
+###### ☕ 請我喝杯咖啡
+- 如果覺得本項目對你有幫助且行有餘力，可以請我喝杯咖啡，支持項目的持續維護與迭代；不讚賞也完全不影響使用。   
+<small>（讚賞時可備註聯繫方式，方便私信致謝與後續交流反饋）</small>
+- 感謝支持, 祝您股市長虹，拿主力當提款機。
 
 <div align="center">
   <img src="./sources/wechatpay.jpg" alt="WeChat Pay" width="200" style="margin-right: 20px;">

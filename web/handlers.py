@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Web 处理器层 - 请求处理
+Web 處理器層 - 請求處理
 ===================================
 
-职责：
-1. 处理各类 HTTP 请求
-2. 调用服务层执行业务逻辑
-3. 返回响应数据
+職責：
+1. 處理各類 HTTP 請求
+2. 調用服務層執行業務邏輯
+3. 返回響應數據
 
-处理器分类：
-- PageHandler: 页面请求处理
-- ApiHandler: API 接口处理
+處理器分類：
+- PageHandler: 頁面請求處理
+- ApiHandler: API 接口處理
 """
 
 from __future__ import annotations
@@ -34,11 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# 响应辅助类
+# 響應輔助類
 # ============================================================
 
 class Response:
-    """HTTP 响应封装"""
+    """HTTP 響應封裝"""
     
     def __init__(
         self,
@@ -51,7 +51,7 @@ class Response:
         self.content_type = content_type
     
     def send(self, handler: 'BaseHTTPRequestHandler') -> None:
-        """发送响应到客户端"""
+        """發送響應到客戶端"""
         handler.send_response(self.status)
         handler.send_header("Content-Type", self.content_type)
         handler.send_header("Content-Length", str(len(self.body)))
@@ -60,7 +60,7 @@ class Response:
 
 
 class JsonResponse(Response):
-    """JSON 响应封装"""
+    """JSON 響應封裝"""
     
     def __init__(
         self,
@@ -76,7 +76,7 @@ class JsonResponse(Response):
 
 
 class HtmlResponse(Response):
-    """HTML 响应封装"""
+    """HTML 響應封裝"""
     
     def __init__(
         self,
@@ -91,17 +91,17 @@ class HtmlResponse(Response):
 
 
 # ============================================================
-# 页面处理器
+# 頁面處理器
 # ============================================================
 
 class PageHandler:
-    """页面请求处理器"""
+    """頁面請求處理器"""
     
     def __init__(self):
         self.config_service = get_config_service()
     
     def handle_index(self) -> Response:
-        """处理首页请求 GET /"""
+        """處理首頁請求 GET /"""
         stock_list = self.config_service.get_stock_list()
         env_filename = self.config_service.get_env_filename()
         body = render_config_page(stock_list, env_filename)
@@ -109,10 +109,10 @@ class PageHandler:
     
     def handle_update(self, form_data: Dict[str, list]) -> Response:
         """
-        处理配置更新 POST /update
+        處理配置更新 POST /update
         
         Args:
-            form_data: 表单数据
+            form_data: 表單數據
         """
         stock_list = form_data.get("stock_list", [""])[0]
         normalized = self.config_service.set_stock_list(stock_list)
@@ -122,18 +122,18 @@ class PageHandler:
 
 
 # ============================================================
-# API 处理器
+# API 處理器
 # ============================================================
 
 class ApiHandler:
-    """API 请求处理器"""
+    """API 請求處理器"""
     
     def __init__(self):
         self.analysis_service = get_analysis_service()
     
     def handle_health(self) -> Response:
         """
-        健康检查 GET /health
+        健康檢查 GET /health
         
         返回:
             {
@@ -151,59 +151,59 @@ class ApiHandler:
     
     def handle_analysis(self, query: Dict[str, list]) -> Response:
         """
-        触发股票分析 GET /analysis?code=xxx
+        觸發股票分析 GET /analysis?code=xxx
         
         Args:
-            query: URL 查询参数
+            query: URL 查詢參數
             
         返回:
             {
                 "success": true,
-                "message": "分析任务已提交",
+                "message": "分析任務已提交",
                 "code": "600519",
                 "task_id": "600519_20260119_103000"
             }
         """
-        # 获取股票代码参数
+        # 獲取股票代碼參數
         code_list = query.get("code", [])
         if not code_list or not code_list[0].strip():
             return JsonResponse(
-                {"success": False, "error": "缺少必填参数: code (股票代码)"},
+                {"success": False, "error": "缺少必填參數: code (股票代碼)"},
                 status=HTTPStatus.BAD_REQUEST
             )
         
         code = code_list[0].strip()
         
-        # 验证股票代码格式：A股(6位数字) 或 港股(hk+5位数字)
+        # 驗證股票代碼格式：A股(6位數字) 或 港股(hk+5位數字)
         code = code.lower()
         is_valid = re.match(r'^\d{6}$', code) or re.match(r'^hk\d{5}$', code)
         if not is_valid:
             return JsonResponse(
-                {"success": False, "error": f"无效的股票代码格式: {code} (A股6位数字 或 港股hk+5位数字)"},
+                {"success": False, "error": f"無效的股票代碼格式: {code} (A股6位數字 或 港股hk+5位數字)"},
                 status=HTTPStatus.BAD_REQUEST
             )
         
-        # 获取报告类型参数（默认精简报告）
+        # 獲取報告類型參數（默認精簡報告）
         report_type_str = query.get("report_type", ["simple"])[0]
         report_type = ReportType.from_str(report_type_str)
         
-        # 提交异步分析任务
+        # 提交異步分析任務
         try:
             result = self.analysis_service.submit_analysis(code, report_type=report_type)
             return JsonResponse(result)
         except Exception as e:
-            logger.error(f"[ApiHandler] 提交分析任务失败: {e}")
+            logger.error(f"[ApiHandler] 提交分析任務失敗: {e}")
             return JsonResponse(
-                {"success": False, "error": f"提交任务失败: {str(e)}"},
+                {"success": False, "error": f"提交任務失敗: {str(e)}"},
                 status=HTTPStatus.INTERNAL_SERVER_ERROR
             )
     
     def handle_tasks(self, query: Dict[str, list]) -> Response:
         """
-        查询任务列表 GET /tasks
+        查詢任務列表 GET /tasks
         
         Args:
-            query: URL 查询参数 (可选 limit)
+            query: URL 查詢參數 (可選 limit)
             
         返回:
             {
@@ -222,15 +222,15 @@ class ApiHandler:
     
     def handle_task_status(self, query: Dict[str, list]) -> Response:
         """
-        查询单个任务状态 GET /task?id=xxx
+        查詢單個任務狀態 GET /task?id=xxx
         
         Args:
-            query: URL 查询参数
+            query: URL 查詢參數
         """
         task_id_list = query.get("id", [])
         if not task_id_list or not task_id_list[0].strip():
             return JsonResponse(
-                {"success": False, "error": "缺少必填参数: id (任务ID)"},
+                {"success": False, "error": "缺少必填參數: id (任務ID)"},
                 status=HTTPStatus.BAD_REQUEST
             )
         
@@ -239,7 +239,7 @@ class ApiHandler:
         
         if task is None:
             return JsonResponse(
-                {"success": False, "error": f"任务不存在: {task_id}"},
+                {"success": False, "error": f"任務不存在: {task_id}"},
                 status=HTTPStatus.NOT_FOUND
             )
         
@@ -247,50 +247,50 @@ class ApiHandler:
 
 
 # ============================================================
-# Bot Webhook 处理器
+# Bot Webhook 處理器
 # ============================================================
 
 class BotHandler:
     """
-    机器人 Webhook 处理器
+    機器人 Webhook 處理器
     
-    处理各平台的机器人回调请求。
+    處理各平臺的機器人回調請求。
     """
     
     def handle_webhook(self, platform: str, form_data: Dict[str, list], headers: Dict[str, str], body: bytes) -> Response:
         """
-        处理 Webhook 请求
+        處理 Webhook 請求
         
         Args:
-            platform: 平台名称 (feishu, dingtalk, wecom, telegram)
-            form_data: POST 数据（已解析）
-            headers: HTTP 请求头
-            body: 原始请求体
+            platform: 平臺名稱 (feishu, dingtalk, wecom, telegram)
+            form_data: POST 數據（已解析）
+            headers: HTTP 請求頭
+            body: 原始請求體
             
         Returns:
-            Response 对象
+            Response 對象
         """
         try:
             from bot.handler import handle_webhook
             from bot.models import WebhookResponse
             
-            # 调用 bot 模块处理
+            # 調用 bot 模塊處理
             webhook_response = handle_webhook(platform, headers, body)
             
-            # 转换为 web 响应
+            # 轉換為 web 響應
             return JsonResponse(
                 webhook_response.body,
                 status=HTTPStatus(webhook_response.status_code)
             )
             
         except ImportError as e:
-            logger.error(f"[BotHandler] Bot 模块未正确安装: {e}")
+            logger.error(f"[BotHandler] Bot 模塊未正確安裝: {e}")
             return JsonResponse(
                 {"error": "Bot module not available"},
                 status=HTTPStatus.INTERNAL_SERVER_ERROR
             )
         except Exception as e:
-            logger.error(f"[BotHandler] 处理 {platform} Webhook 失败: {e}")
+            logger.error(f"[BotHandler] 處理 {platform} Webhook 失敗: {e}")
             return JsonResponse(
                 {"error": str(e)},
                 status=HTTPStatus.INTERNAL_SERVER_ERROR
@@ -298,7 +298,7 @@ class BotHandler:
 
 
 # ============================================================
-# 处理器工厂
+# 處理器工廠
 # ============================================================
 
 _page_handler: PageHandler | None = None
@@ -307,7 +307,7 @@ _bot_handler: BotHandler | None = None
 
 
 def get_page_handler() -> PageHandler:
-    """获取页面处理器实例"""
+    """獲取頁面處理器實例"""
     global _page_handler
     if _page_handler is None:
         _page_handler = PageHandler()
@@ -315,7 +315,7 @@ def get_page_handler() -> PageHandler:
 
 
 def get_api_handler() -> ApiHandler:
-    """获取 API 处理器实例"""
+    """獲取 API 處理器實例"""
     global _api_handler
     if _api_handler is None:
         _api_handler = ApiHandler()
@@ -323,7 +323,7 @@ def get_api_handler() -> ApiHandler:
 
 
 def get_bot_handler() -> BotHandler:
-    """获取 Bot 处理器实例"""
+    """獲取 Bot 處理器實例"""
     global _bot_handler
     if _bot_handler is None:
         _bot_handler = BotHandler()

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Web 服务层 - 业务逻辑
+Web 服務層 - 業務邏輯
 ===================================
 
-职责：
-1. 配置管理服务 (ConfigService)
-2. 分析任务服务 (AnalysisService)
+職責：
+1. 配置管理服務 (ConfigService)
+2. 分析任務服務 (AnalysisService)
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from bot.models import BotMessage
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# 配置管理服务
+# 配置管理服務
 # ============================================================
 
 _ENV_PATH = os.getenv("ENV_FILE", ".env")
@@ -37,16 +37,16 @@ _STOCK_LIST_RE = re.compile(
 
 class ConfigService:
     """
-    配置管理服务
+    配置管理服務
     
-    负责 .env 文件中 STOCK_LIST 的读写操作
+    負責 .env 文件中 STOCK_LIST 的讀寫操作
     """
     
     def __init__(self, env_path: Optional[str] = None):
         self.env_path = env_path or _ENV_PATH
     
     def read_env_text(self) -> str:
-        """读取 .env 文件内容"""
+        """讀取 .env 文件內容"""
         try:
             with open(self.env_path, "r", encoding="utf-8") as f:
                 return f.read()
@@ -54,24 +54,24 @@ class ConfigService:
             return ""
     
     def write_env_text(self, text: str) -> None:
-        """写入 .env 文件内容"""
+        """寫入 .env 文件內容"""
         with open(self.env_path, "w", encoding="utf-8") as f:
             f.write(text)
     
     def get_stock_list(self) -> str:
-        """获取当前自选股列表字符串"""
+        """獲取當前自選股列表字符串"""
         env_text = self.read_env_text()
         return self._extract_stock_list(env_text)
     
     def set_stock_list(self, stock_list: str) -> str:
         """
-        设置自选股列表
+        設置自選股列表
         
         Args:
-            stock_list: 股票代码字符串（逗号或换行分隔）
+            stock_list: 股票代碼字符串（逗號或換行分隔）
             
         Returns:
-            规范化后的股票列表字符串
+            規範化後的股票列表字符串
         """
         env_text = self.read_env_text()
         normalized = self._normalize_stock_list(stock_list)
@@ -80,16 +80,16 @@ class ConfigService:
         return normalized
     
     def get_env_filename(self) -> str:
-        """获取 .env 文件名"""
+        """獲取 .env 文件名"""
         return os.path.basename(self.env_path)
     
     def _extract_stock_list(self, env_text: str) -> str:
-        """从环境文件中提取 STOCK_LIST 值"""
+        """從環境文件中提取 STOCK_LIST 值"""
         for line in env_text.splitlines():
             m = _STOCK_LIST_RE.match(line)
             if m:
                 raw = m.group("value").strip()
-                # 去除引号
+                # 去除引號
                 if (raw.startswith('"') and raw.endswith('"')) or \
                    (raw.startswith("'") and raw.endswith("'")):
                     raw = raw[1:-1]
@@ -97,13 +97,13 @@ class ConfigService:
         return ""
     
     def _normalize_stock_list(self, value: str) -> str:
-        """规范化股票列表格式"""
+        """規範化股票列表格式"""
         parts = [p.strip() for p in value.replace("\n", ",").split(",")]
         parts = [p for p in parts if p]
         return ",".join(parts)
     
     def _update_stock_list(self, env_text: str, new_value: str) -> str:
-        """更新环境文件中的 STOCK_LIST"""
+        """更新環境文件中的 STOCK_LIST"""
         lines = env_text.splitlines(keepends=False)
         out_lines: List[str] = []
         replaced = False
@@ -128,17 +128,17 @@ class ConfigService:
 
 
 # ============================================================
-# 分析任务服务
+# 分析任務服務
 # ============================================================
 
 class AnalysisService:
     """
-    分析任务服务
+    分析任務服務
     
-    负责：
-    1. 管理异步分析任务
-    2. 执行股票分析
-    3. 触发通知推送
+    負責：
+    1. 管理異步分析任務
+    2. 執行股票分析
+    3. 觸發通知推送
     """
     
     _instance: Optional['AnalysisService'] = None
@@ -152,7 +152,7 @@ class AnalysisService:
     
     @classmethod
     def get_instance(cls) -> 'AnalysisService':
-        """获取单例实例"""
+        """獲取單例實例"""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -161,7 +161,7 @@ class AnalysisService:
     
     @property
     def executor(self) -> ThreadPoolExecutor:
-        """获取或创建线程池"""
+        """獲取或創建線程池"""
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=self._max_workers,
@@ -176,44 +176,44 @@ class AnalysisService:
         source_message: Optional[BotMessage] = None
     ) -> Dict[str, Any]:
         """
-        提交异步分析任务
+        提交異步分析任務
         
         Args:
-            code: 股票代码
-            report_type: 报告类型枚举
+            code: 股票代碼
+            report_type: 報告類型枚舉
             
         Returns:
-            任务信息字典
+            任務信息字典
         """
-        # 确保 report_type 是枚举类型
+        # 確保 report_type 是枚舉類型
         if isinstance(report_type, str):
             report_type = ReportType.from_str(report_type)
         
         task_id = f"{code}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         
-        # 提交到线程池
+        # 提交到線程池
         self.executor.submit(self._run_analysis, code, task_id, report_type, source_message)
         
-        logger.info(f"[AnalysisService] 已提交股票 {code} 的分析任务, task_id={task_id}, report_type={report_type.value}")
+        logger.info(f"[AnalysisService] 已提交股票 {code} 的分析任務, task_id={task_id}, report_type={report_type.value}")
         
         return {
             "success": True,
-            "message": "分析任务已提交，将异步执行并推送通知",
+            "message": "分析任務已提交，將異步執行並推送通知",
             "code": code,
             "task_id": task_id,
             "report_type": report_type.value
         }
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """获取任务状态"""
+        """獲取任務狀態"""
         with self._tasks_lock:
             return self._tasks.get(task_id)
     
     def list_tasks(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """列出最近的任务"""
+        """列出最近的任務"""
         with self._tasks_lock:
             tasks = list(self._tasks.values())
-        # 按开始时间倒序
+        # 按開始時間倒序
         tasks.sort(key=lambda x: x.get('start_time', ''), reverse=True)
         return tasks[:limit]
     
@@ -225,16 +225,16 @@ class AnalysisService:
         source_message: Optional[BotMessage] = None
     ) -> Dict[str, Any]:
         """
-        执行单只股票分析
+        執行單隻股票分析
         
-        内部方法，在线程池中运行
+        內部方法，在線程池中運行
         
         Args:
-            code: 股票代码
-            task_id: 任务ID
-            report_type: 报告类型枚举
+            code: 股票代碼
+            task_id: 任務ID
+            report_type: 報告類型枚舉
         """
-        # 初始化任务状态
+        # 初始化任務狀態
         with self._tasks_lock:
             self._tasks[task_id] = {
                 "task_id": task_id,
@@ -247,13 +247,13 @@ class AnalysisService:
             }
         
         try:
-            # 延迟导入避免循环依赖
+            # 延遲導入避免循環依賴
             from config import get_config
             from main import StockAnalysisPipeline
             
-            logger.info(f"[AnalysisService] 开始分析股票: {code}")
+            logger.info(f"[AnalysisService] 開始分析股票: {code}")
             
-            # 创建分析管道
+            # 創建分析管道
             config = get_config()
             pipeline = StockAnalysisPipeline(
                 config=config,
@@ -261,7 +261,7 @@ class AnalysisService:
                 source_message=source_message
             )
             
-            # 执行单只股票分析（启用单股推送）
+            # 執行單隻股票分析（啟用單股推送）
             result = pipeline.process_single_stock(
                 code=code,
                 skip_analysis=False,
@@ -293,15 +293,15 @@ class AnalysisService:
                     self._tasks[task_id].update({
                         "status": "failed",
                         "end_time": datetime.now().isoformat(),
-                        "error": "分析返回空结果"
+                        "error": "分析返回空結果"
                     })
                 
-                logger.warning(f"[AnalysisService] 股票 {code} 分析失败: 返回空结果")
-                return {"success": False, "task_id": task_id, "error": "分析返回空结果"}
+                logger.warning(f"[AnalysisService] 股票 {code} 分析失敗: 返回空結果")
+                return {"success": False, "task_id": task_id, "error": "分析返回空結果"}
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"[AnalysisService] 股票 {code} 分析异常: {error_msg}")
+            logger.error(f"[AnalysisService] 股票 {code} 分析異常: {error_msg}")
             
             with self._tasks_lock:
                 self._tasks[task_id].update({
@@ -314,14 +314,14 @@ class AnalysisService:
 
 
 # ============================================================
-# 便捷函数
+# 便捷函數
 # ============================================================
 
 def get_config_service() -> ConfigService:
-    """获取配置服务实例"""
+    """獲取配置服務實例"""
     return ConfigService()
 
 
 def get_analysis_service() -> AnalysisService:
-    """获取分析服务单例"""
+    """獲取分析服務單例"""
     return AnalysisService.get_instance()

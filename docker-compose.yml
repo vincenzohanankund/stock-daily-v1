@@ -1,11 +1,11 @@
 # ===================================
-# A股自选股智能分析系统 - Docker Compose
+# A股自選股智能分析系統 - Docker Compose
 # ===================================
 # 
 # 使用方式:
-#   定时模式: docker-compose up -d
+#   定時模式: docker-compose up -d
 #   WebUI模式: docker-compose up -d webui
-#   同时启动: docker-compose up -d analyzer webui
+#   同時啟動: docker-compose up -d analyzer webui
 
 version: '3.8'
 
@@ -15,7 +15,7 @@ x-common: &common
     dockerfile: Dockerfile
   restart: unless-stopped
 
-  # 环境变量（从 .env 文件加载）
+  # 環境變量（從 .env 文件加載）
   env_file:
     - .env
 
@@ -28,12 +28,12 @@ x-common: &common
   environment:
     - TZ=Asia/Shanghai
 
-    # 注意：容器内如果绑定到 127.0.0.1，宿主机端口映射将无法访问 WebUI。
-    # 即使 .env 里设置了 WEBUI_HOST=127.0.0.1，这里也会强制覆盖。
+    # 注意：容器內如果綁定到 127.0.0.1，宿主機端口映射將無法訪問 WebUI。
+    # 即使 .env 裡設置了 WEBUI_HOST=127.0.0.1，這裡也會強制覆蓋。
     - WEBUI_HOST=0.0.0.0
     - WEBUI_PORT=8000
 
-    # 代理设置（如果需要）
+    # 代理設置（如果需要）
     # - http_proxy=http://host.docker.internal:10809
     # - https_proxy=http://host.docker.internal:10809
   logging:
@@ -41,7 +41,7 @@ x-common: &common
     options:
       max-size: "10m"
       max-file: "3"
-  # 资源限制
+  # 資源限制
   deploy:
     resources:
       limits:
@@ -50,7 +50,7 @@ x-common: &common
         memory: 256M
 
 services:
-  # 定时任务模式
+  # 定時任務模式
   analyzer:
     <<: *common
     container_name: stock-analyzer

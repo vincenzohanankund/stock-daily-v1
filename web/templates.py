@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Web 模板层 - HTML 页面生成
+Web 模板層 - HTML 頁面生成
 ===================================
 
-职责：
-1. 生成 HTML 页面
-2. 管理 CSS 样式
-3. 提供可复用的页面组件
+職責：
+1. 生成 HTML 頁面
+2. 管理 CSS 樣式
+3. 提供可複用的頁面組件
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Optional
 
 
 # ============================================================
-# CSS 样式定义
+# CSS 樣式定義
 # ============================================================
 
 BASE_CSS = """
@@ -322,7 +322,7 @@ button:active {
 }
 
 .task-list:empty::after {
-    content: '暂无任务';
+    content: '暫無任務';
     display: block;
     text-align: center;
     color: var(--text-light);
@@ -551,7 +551,7 @@ button:active {
 
 
 # ============================================================
-# 页面模板
+# 頁面模板
 # ============================================================
 
 def render_base(
@@ -561,13 +561,13 @@ def render_base(
     extra_js: str = ""
 ) -> str:
     """
-    渲染基础 HTML 模板
+    渲染基礎 HTML 模板
     
     Args:
-        title: 页面标题
-        content: 页面内容 HTML
-        extra_css: 额外的 CSS 样式
-        extra_js: 额外的 JavaScript
+        title: 頁面標題
+        content: 頁面內容 HTML
+        extra_css: 額外的 CSS 樣式
+        extra_js: 額外的 JavaScript
     """
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -590,7 +590,7 @@ def render_toast(message: str, toast_type: str = "success") -> str:
     
     Args:
         message: 通知消息
-        toast_type: 类型 (success, error, warning)
+        toast_type: 類型 (success, error, warning)
     """
     icon_map = {
         "success": "✅",
@@ -618,17 +618,17 @@ def render_config_page(
     message: Optional[str] = None
 ) -> bytes:
     """
-    渲染配置页面
+    渲染配置頁面
     
     Args:
-        stock_list: 当前自选股列表
-        env_filename: 环境文件名
-        message: 可选的提示消息
+        stock_list: 當前自選股列表
+        env_filename: 環境文件名
+        message: 可選的提示消息
     """
     safe_value = html.escape(stock_list)
     toast_html = render_toast(message) if message else ""
     
-    # 分析组件的 JavaScript - 支持多任务
+    # 分析組件的 JavaScript - 支持多任務
     analysis_js = """
 <script>
 (function() {
@@ -637,16 +637,16 @@ def render_config_page(
     const taskList = document.getElementById('task_list');
     const reportTypeSelect = document.getElementById('report_type');
     
-    // 任务管理
+    // 任務管理
     const tasks = new Map(); // taskId -> {task, pollCount}
     let pollInterval = null;
-    const MAX_POLL_COUNT = 120; // 6 分钟超时：120 * 3000ms = 360000ms
+    const MAX_POLL_COUNT = 120; // 6 分鐘超時：120 * 3000ms = 360000ms
     const POLL_INTERVAL_MS = 3000;
     const MAX_TASKS_DISPLAY = 10;
     
-    // 允许输入数字和字母（支持港股 hkxxxxx 格式）
+    // 允許輸入數字和字母（支持港股 hkxxxxx 格式）
     codeInput.addEventListener('input', function(e) {
-        // 转小写，只保留字母和数字
+        // 轉小寫，只保留字母和數字
         this.value = this.value.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (this.value.length > 8) {
             this.value = this.value.slice(0, 8);
@@ -654,7 +654,7 @@ def render_config_page(
         updateButtonState();
     });
     
-    // 回车提交
+    // 回車提交
     codeInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -664,7 +664,7 @@ def render_config_page(
         }
     });
     
-    // 更新按钮状态 - 支持 A股(6位数字) 或 港股(hk+5位数字)
+    // 更新按鈕狀態 - 支持 A股(6位數字) 或 港股(hk+5位數字)
     function updateButtonState() {
         const code = codeInput.value.trim().toLowerCase();
         const isAStock = /^\\d{6}$/.test(code);           // A股: 600519
@@ -672,14 +672,14 @@ def render_config_page(
         submitBtn.disabled = !(isAStock || isHKStock);
     }
     
-    // 格式化时间
+    // 格式化時間
     function formatTime(isoString) {
         if (!isoString) return '-';
         const date = new Date(isoString);
         return date.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
     }
     
-    // 计算耗时
+    // 計算耗時
     function calcDuration(start, end) {
         if (!start) return '-';
         const startTime = new Date(start).getTime();
@@ -691,16 +691,16 @@ def render_config_page(
         return minutes + 'm' + remainSec + 's';
     }
     
-    // 获取建议样式类
+    // 獲取建議樣式類
     function getAdviceClass(advice) {
         if (!advice) return '';
-        if (advice.includes('买') || advice.includes('加仓')) return 'buy';
-        if (advice.includes('卖') || advice.includes('减仓')) return 'sell';
+        if (advice.includes('買') || advice.includes('加倉')) return 'buy';
+        if (advice.includes('賣') || advice.includes('減倉')) return 'sell';
         if (advice.includes('持有')) return 'hold';
         return 'wait';
     }
     
-    // 渲染单个任务卡片
+    // 渲染單個任務卡片
     function renderTaskCard(taskId, taskData) {
         const task = taskData.task || {};
         const status = task.status || 'pending';
@@ -711,7 +711,7 @@ def render_config_page(
         let statusText = '等待中';
         if (status === 'running') { statusIcon = '<span class="spinner"></span>'; statusText = '分析中'; }
         else if (status === 'completed') { statusIcon = '✓'; statusText = '完成'; }
-        else if (status === 'failed') { statusIcon = '✗'; statusText = '失败'; }
+        else if (status === 'failed') { statusIcon = '✗'; statusText = '失敗'; }
         
         let resultHtml = '';
         if (status === 'completed' && result.operation_advice) {
@@ -721,13 +721,13 @@ def render_config_page(
                 '<span class="task-score">' + (result.sentiment_score || '-') + '分</span>' +
                 '</div>';
         } else if (status === 'failed') {
-            resultHtml = '<div class="task-result"><span class="task-advice sell">失败</span></div>';
+            resultHtml = '<div class="task-result"><span class="task-advice sell">失敗</span></div>';
         }
         
         let detailHtml = '';
         if (status === 'completed' && result.name) {
             detailHtml = '<div class="task-detail" id="detail_' + taskId + '">' +
-                '<div class="task-detail-row"><span class="label">趋势</span><span>' + (result.trend_prediction || '-') + '</span></div>' +
+                '<div class="task-detail-row"><span class="label">趨勢</span><span>' + (result.trend_prediction || '-') + '</span></div>' +
                 (result.analysis_summary ? '<div class="task-detail-summary">' + result.analysis_summary.substring(0, 100) + '...</div>' : '') +
                 '</div>';
         }
@@ -742,7 +742,7 @@ def render_config_page(
                 '<div class="task-meta">' +
                     '<span>⏱ ' + formatTime(task.start_time) + '</span>' +
                     '<span>⏳ ' + calcDuration(task.start_time, task.end_time) + '</span>' +
-                    '<span>' + (task.report_type === 'full' ? '📊完整' : '📝精简') + '</span>' +
+                    '<span>' + (task.report_type === 'full' ? '📊完整' : '📝精簡') + '</span>' +
                 '</div>' +
             '</div>' +
             resultHtml +
@@ -752,10 +752,10 @@ def render_config_page(
         '</div>' + detailHtml;
     }
     
-    // 渲染所有任务
+    // 渲染所有任務
     function renderAllTasks() {
         if (tasks.size === 0) {
-            taskList.innerHTML = '<div class="task-hint">💡 输入股票代码开始分析</div>';
+            taskList.innerHTML = '<div class="task-hint">💡 輸入股票代碼開始分析</div>';
             return;
         }
         
@@ -768,13 +768,13 @@ def render_config_page(
         });
         
         if (sortedTasks.length > MAX_TASKS_DISPLAY) {
-            html += '<div class="task-hint">... 还有 ' + (sortedTasks.length - MAX_TASKS_DISPLAY) + ' 个任务</div>';
+            html += '<div class="task-hint">... 還有 ' + (sortedTasks.length - MAX_TASKS_DISPLAY) + ' 個任務</div>';
         }
         
         taskList.innerHTML = html;
     }
     
-    // 切换详情显示
+    // 切換詳情顯示
     window.toggleDetail = function(taskId) {
         const detail = document.getElementById('detail_' + taskId);
         if (detail) {
@@ -782,14 +782,14 @@ def render_config_page(
         }
     };
     
-    // 移除任务
+    // 移除任務
     window.removeTask = function(taskId) {
         tasks.delete(taskId);
         renderAllTasks();
         checkStopPolling();
     };
     
-    // 轮询所有运行中的任务
+    // 輪詢所有運行中的任務
     function pollAllTasks() {
         let hasRunning = false;
         
@@ -802,7 +802,7 @@ def render_config_page(
                 if (taskData.pollCount > MAX_POLL_COUNT) {
                     taskData.task = taskData.task || {};
                     taskData.task.status = 'failed';
-                    taskData.task.error = '轮询超时';
+                    taskData.task.error = '輪詢超時';
                     return;
                 }
                 
@@ -823,7 +823,7 @@ def render_config_page(
         }
     }
     
-    // 检查是否需要停止轮询
+    // 檢查是否需要停止輪詢
     function checkStopPolling() {
         let hasRunning = false;
         tasks.forEach((taskData) => {
@@ -839,7 +839,7 @@ def render_config_page(
         }
     }
     
-    // 开始轮询
+    // 開始輪詢
     function startPolling() {
         if (!pollInterval) {
             pollInterval = setInterval(pollAllTasks, POLL_INTERVAL_MS);
@@ -879,7 +879,7 @@ def render_config_page(
                     startPolling();
                     codeInput.value = '';
                     
-                    // 立即轮询一次
+                    // 立即輪詢一次
                     setTimeout(() => {
                         fetch('/task?id=' + encodeURIComponent(taskId))
                             .then(r => r.json())
@@ -891,11 +891,11 @@ def render_config_page(
                             });
                     }, 500);
                 } else {
-                    alert('提交失败: ' + (data.error || '未知错误'));
+                    alert('提交失敗: ' + (data.error || '未知錯誤'));
                 }
             })
             .catch(error => {
-                alert('请求失败: ' + error.message);
+                alert('請求失敗: ' + error.message);
             })
             .finally(() => {
                 submitBtn.disabled = false;
@@ -915,7 +915,7 @@ def render_config_page(
   <div class="container">
     <h2>📈 A/H股分析</h2>
     
-    <!-- 快速分析区域 -->
+    <!-- 快速分析區域 -->
     <div class="analysis-section" style="margin-top: 0; padding-top: 0; border-top: none;">
       <div class="form-group" style="margin-bottom: 0.75rem;">
         <div class="input-group">
@@ -926,9 +926,9 @@ def render_config_page(
               maxlength="8"
               autocomplete="off"
           />
-          <select id="report_type" class="report-select" title="选择报告类型">
-            <option value="simple">📝 精简报告</option>
-            <option value="full">📊 完整报告</option>
+          <select id="report_type" class="report-select" title="選擇報告類型">
+            <option value="simple">📝 精簡報告</option>
+            <option value="full">📊 完整報告</option>
           </select>
           <button type="button" id="analysis_btn" class="btn-analysis" onclick="submitAnalysis()" disabled>
             🚀 分析
@@ -936,22 +936,22 @@ def render_config_page(
         </div>
       </div>
       
-      <!-- 任务列表 -->
+      <!-- 任務列表 -->
       <div id="task_list" class="task-list"></div>
     </div>
     
     <hr class="section-divider">
     
-    <!-- 自选股配置区域 -->
+    <!-- 自選股配置區域 -->
     <form method="post" action="/update">
       <div class="form-group">
-        <label for="stock_list">📋 自选股列表 <span class="code-badge">{html.escape(env_filename)}</span></label>
-        <p>仅用于本地环境 (127.0.0.1) • 安全修改 .env 配置</p>
+        <label for="stock_list">📋 自選股列表 <span class="code-badge">{html.escape(env_filename)}</span></label>
+        <p>僅用於本地環境 (127.0.0.1) • 安全修改 .env 配置</p>
         <textarea 
             id="stock_list" 
             name="stock_list" 
             rows="4" 
-            placeholder="例如: 600519, 000001 (逗号或换行分隔)"
+            placeholder="例如: 600519, 000001 (逗號或換行分隔)"
         >{safe_value}</textarea>
       </div>
       <button type="submit">💾 保存</button>
@@ -967,7 +967,7 @@ def render_config_page(
 """
     
     page = render_base(
-        title="A/H股自选配置 | WebUI",
+        title="A/H股自選配置 | WebUI",
         content=content
     )
     return page.encode("utf-8")
@@ -979,12 +979,12 @@ def render_error_page(
     details: Optional[str] = None
 ) -> bytes:
     """
-    渲染错误页面
+    渲染錯誤頁面
     
     Args:
-        status_code: HTTP 状态码
-        message: 错误消息
-        details: 详细信息
+        status_code: HTTP 狀態碼
+        message: 錯誤消息
+        details: 詳細信息
     """
     details_html = f"<p class='text-muted'>{html.escape(details)}</p>" if details else ""
     
@@ -993,12 +993,12 @@ def render_error_page(
     <h2>😵 {status_code}</h2>
     <p>{html.escape(message)}</p>
     {details_html}
-    <a href="/" style="color: var(--primary); text-decoration: none;">← 返回首页</a>
+    <a href="/" style="color: var(--primary); text-decoration: none;">← 返回首頁</a>
   </div>
 """
     
     page = render_base(
-        title=f"错误 {status_code}",
+        title=f"錯誤 {status_code}",
         content=content
     )
     return page.encode("utf-8")

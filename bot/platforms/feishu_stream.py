@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-飞书 Stream 模式适配器
+飛書 Stream 模式適配器
 ===================================
 
-使用飞书官方 lark-oapi SDK 的 WebSocket 长连接模式接入机器人，
-无需公网 IP 和 Webhook 配置。
+使用飛書官方 lark-oapi SDK 的 WebSocket 長連接模式接入機器人，
+無需公網 IP 和 Webhook 配置。
 
-优势：
-- 不需要公网 IP 或域名
+優勢：
+- 不需要公網 IP 或域名
 - 不需要配置 Webhook URL
-- 通过 WebSocket 长连接接收消息
-- 更简单的接入方式
-- 内置自动重连和心跳保活
+- 通過 WebSocket 長連接接收消息
+- 更簡單的接入方式
+- 內置自動重連和心跳保活
 
-依赖：
+依賴：
 pip install lark-oapi
 
-飞书长连接文档：
+飛書長連接文檔：
 https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/server-side-sdk/python--sdk/handle-events
 """
 
@@ -29,7 +29,7 @@ from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
-# 尝试导入飞书 SDK
+# 嘗試導入飛書 SDK
 try:
     import lark_oapi as lark
     from lark_oapi import ws
@@ -44,27 +44,27 @@ try:
     FEISHU_SDK_AVAILABLE = True
 except ImportError:
     FEISHU_SDK_AVAILABLE = False
-    logger.warning("[Feishu Stream] lark-oapi SDK 未安装，Stream 模式不可用")
-    logger.warning("[Feishu Stream] 请运行: pip install lark-oapi")
+    logger.warning("[Feishu Stream] lark-oapi SDK 未安裝，Stream 模式不可用")
+    logger.warning("[Feishu Stream] 請運行: pip install lark-oapi")
 
 from bot.models import BotMessage, BotResponse, ChatType
 
 
 class FeishuReplyClient:
     """
-    飞书消息回复客户端
+    飛書消息回覆客戶端
     
-    使用飞书 API 发送回复消息。
+    使用飛書 API 發送回覆消息。
     """
 
     def __init__(self, app_id: str, app_secret: str):
         """
         Args:
-            app_id: 飞书应用 ID
-            app_secret: 飞书应用密钥
+            app_id: 飛書應用 ID
+            app_secret: 飛書應用密鑰
         """
         if not FEISHU_SDK_AVAILABLE:
-            raise ImportError("lark-oapi SDK 未安装")
+            raise ImportError("lark-oapi SDK 未安裝")
 
         self._client = lark.Client.builder() \
             .app_id(app_id) \
@@ -75,19 +75,19 @@ class FeishuReplyClient:
     def reply_text(self, message_id: str, text: str, at_user: bool = False, 
                    user_id: Optional[str] = None) -> bool:
         """
-        回复文本消息
+        回覆文本消息
         
         Args:
             message_id: 原消息 ID
-            text: 回复文本
-            at_user: 是否 @用户
-            user_id: 用户 open_id（at_user=True 时需要）
+            text: 回覆文本
+            at_user: 是否 @用戶
+            user_id: 用戶 open_id（at_user=True 時需要）
             
         Returns:
-            是否发送成功
+            是否發送成功
         """
         try:
-            # 构建回复内容
+            # 構建回覆內容
             if at_user and user_id:
                 content = json.dumps({"text": f"<at user_id=\"{user_id}\"></at> {text}"})
             else:
@@ -107,30 +107,30 @@ class FeishuReplyClient:
 
             if not response.success():
                 logger.error(
-                    f"[Feishu Stream] 回复消息失败: code={response.code}, "
+                    f"[Feishu Stream] 回覆消息失敗: code={response.code}, "
                     f"msg={response.msg}, log_id={response.get_log_id()}"
                 )
                 return False
 
-            logger.debug(f"[Feishu Stream] 回复消息成功: message_id={message_id}")
+            logger.debug(f"[Feishu Stream] 回覆消息成功: message_id={message_id}")
             return True
 
         except Exception as e:
-            logger.error(f"[Feishu Stream] 回复消息异常: {e}")
+            logger.error(f"[Feishu Stream] 回覆消息異常: {e}")
             return False
 
     def send_to_chat(self, chat_id: str, text: str, 
                      receive_id_type: str = "chat_id") -> bool:
         """
-        发送消息到指定会话
+        發送消息到指定會話
         
         Args:
-            chat_id: 会话 ID
+            chat_id: 會話 ID
             text: 消息文本
-            receive_id_type: 接收者 ID 类型，默认 chat_id
+            receive_id_type: 接收者 ID 類型，默認 chat_id
             
         Returns:
-            是否发送成功
+            是否發送成功
         """
         try:
             content = json.dumps({"text": text})
@@ -150,25 +150,25 @@ class FeishuReplyClient:
 
             if not response.success():
                 logger.error(
-                    f"[Feishu Stream] 发送消息失败: code={response.code}, "
+                    f"[Feishu Stream] 發送消息失敗: code={response.code}, "
                     f"msg={response.msg}, log_id={response.get_log_id()}"
                 )
                 return False
 
-            logger.debug(f"[Feishu Stream] 发送消息成功: chat_id={chat_id}")
+            logger.debug(f"[Feishu Stream] 發送消息成功: chat_id={chat_id}")
             return True
 
         except Exception as e:
-            logger.error(f"[Feishu Stream] 发送消息异常: {e}")
+            logger.error(f"[Feishu Stream] 發送消息異常: {e}")
             return False
 
 
 class FeishuStreamHandler:
     """
-    飞书 Stream 模式消息处理器
+    飛書 Stream 模式消息處理器
     
-    将 SDK 的事件转换为统一的 BotMessage 格式，
-    并调用命令分发器处理。
+    將 SDK 的事件轉換為統一的 BotMessage 格式，
+    並調用命令分發器處理。
     """
 
     def __init__(
@@ -178,8 +178,8 @@ class FeishuStreamHandler:
     ):
         """
         Args:
-            on_message: 消息处理回调函数，接收 BotMessage 返回 BotResponse
-            reply_client: 飞书回复客户端
+            on_message: 消息處理回調函數，接收 BotMessage 返回 BotResponse
+            reply_client: 飛書回覆客戶端
         """
         self._on_message = on_message
         self._reply_client = reply_client
@@ -187,14 +187,14 @@ class FeishuStreamHandler:
 
     @staticmethod
     def _truncate_log_content(text: str, max_len: int = 200) -> str:
-        """截断日志内容"""
+        """截斷日誌內容"""
         cleaned = text.replace("\n", " ").strip()
         if len(cleaned) > max_len:
             return f"{cleaned[:max_len]}..."
         return cleaned
 
     def _log_incoming_message(self, message: BotMessage) -> None:
-        """记录收到的消息日志"""
+        """記錄收到的消息日誌"""
         content = message.raw_content or message.content or ""
         summary = self._truncate_log_content(content)
         self._logger.info(
@@ -209,10 +209,10 @@ class FeishuStreamHandler:
 
     def handle_message(self, event: 'P2ImMessageReceiveV1') -> None:
         """
-        处理接收到的消息事件
+        處理接收到的消息事件
         
         Args:
-            event: 飞书消息接收事件
+            event: 飛書消息接收事件
         """
         try:
             # 解析消息
@@ -223,10 +223,10 @@ class FeishuStreamHandler:
 
             self._log_incoming_message(bot_message)
 
-            # 调用消息处理回调
+            # 調用消息處理回調
             response = self._on_message(bot_message)
 
-            # 发送回复
+            # 發送回覆
             if response and response.text:
                 self._reply_client.reply_text(
                     message_id=bot_message.message_id,
@@ -236,15 +236,15 @@ class FeishuStreamHandler:
                 )
 
         except Exception as e:
-            self._logger.error(f"[Feishu Stream] 处理消息失败: {e}")
+            self._logger.error(f"[Feishu Stream] 處理消息失敗: {e}")
             self._logger.exception(e)
 
     def _parse_event_message(self, event: 'P2ImMessageReceiveV1') -> Optional[BotMessage]:
         """
-        解析飞书事件消息为统一格式
+        解析飛書事件消息為統一格式
         
         Args:
-            event: P2ImMessageReceiveV1 事件对象
+            event: P2ImMessageReceiveV1 事件對象
         """
         try:
             event_data = event.event
@@ -257,13 +257,13 @@ class FeishuStreamHandler:
             if message_data is None:
                 return None
 
-            # 只处理文本消息
+            # 只處理文本消息
             message_type = message_data.message_type or ""
             if message_type != "text":
                 self._logger.debug(f"[Feishu Stream] 忽略非文本消息: {message_type}")
                 return None
 
-            # 解析消息内容
+            # 解析消息內容
             content_str = message_data.content or "{}"
             try:
                 content_json = json.loads(content_str)
@@ -271,16 +271,16 @@ class FeishuStreamHandler:
             except json.JSONDecodeError:
                 raw_content = content_str
 
-            # 提取命令（去除 @机器人）
+            # 提取命令（去除 @機器人）
             content = self._extract_command(raw_content, message_data.mentions)
             mentioned = "@" in raw_content or bool(message_data.mentions)
 
-            # 获取发送者信息
+            # 獲取發送者信息
             user_id = ""
             if sender_data and sender_data.sender_id:
                 user_id = sender_data.sender_id.open_id or sender_data.sender_id.user_id or ""
 
-            # 获取会话类型
+            # 獲取會話類型
             chat_type_str = message_data.chat_type or ""
             if chat_type_str == "group":
                 chat_type = ChatType.GROUP
@@ -289,7 +289,7 @@ class FeishuStreamHandler:
             else:
                 chat_type = ChatType.UNKNOWN
 
-            # 创建时间
+            # 創建時間
             create_time = message_data.create_time
             try:
                 if create_time:
@@ -299,7 +299,7 @@ class FeishuStreamHandler:
             except (ValueError, TypeError):
                 timestamp = datetime.now()
 
-            # 构建原始数据
+            # 構建原始數據
             raw_data = {
                 "header": {
                     "event_id": event.header.event_id if event.header else "",
@@ -320,7 +320,7 @@ class FeishuStreamHandler:
                 platform="feishu",
                 message_id=message_data.message_id or "",
                 user_id=user_id,
-                user_name=user_id,  # 飞书不直接返回用户名
+                user_name=user_id,  # 飛書不直接返回用戶名
                 chat_id=message_data.chat_id or "",
                 chat_type=chat_type,
                 content=content,
@@ -332,14 +332,14 @@ class FeishuStreamHandler:
             )
 
         except Exception as e:
-            self._logger.error(f"[Feishu Stream] 解析消息失败: {e}")
+            self._logger.error(f"[Feishu Stream] 解析消息失敗: {e}")
             return None
 
     def _extract_command(self, text: str, mentions: list) -> str:
         """
-        提取命令内容（去除 @机器人）
+        提取命令內容（去除 @機器人）
         
-        飞书的 @用户 格式是：@_user_1, @_user_2 等
+        飛書的 @用戶 格式是：@_user_1, @_user_2 等
         
         Args:
             text: 原始消息文本
@@ -347,31 +347,31 @@ class FeishuStreamHandler:
         """
         import re
         
-        # 方式1: 通过 mentions 列表移除（精确匹配）
+        # 方式1: 通過 mentions 列表移除（精確匹配）
         for mention in (mentions or []):
             key = getattr(mention, 'key', '') or ''
             if key:
                 text = text.replace(key, '')
 
-        # 方式2: 正则兜底，移除飞书 @用户 格式（@_user_N）
-        # 当 mentions 为空或未正确传递时生效
+        # 方式2: 正則兜底，移除飛書 @用戶 格式（@_user_N）
+        # 當 mentions 為空或未正確傳遞時生效
         text = re.sub(r'@_user_\d+\s*', '', text)
 
-        # 清理多余空格
+        # 清理多餘空格
         return ' '.join(text.split())
 
 
 class FeishuStreamClient:
     """
-    飞书 Stream 模式客户端
+    飛書 Stream 模式客戶端
     
-    封装 lark-oapi SDK 的 WebSocket 客户端，提供简单的启动接口。
+    封裝 lark-oapi SDK 的 WebSocket 客戶端，提供簡單的啟動接口。
     
     使用方式：
         client = FeishuStreamClient()
-        client.start()  # 阻塞运行
+        client.start()  # 阻塞運行
         
-        # 或者在后台运行
+        # 或者在後臺運行
         client.start_background()
     """
 
@@ -382,13 +382,13 @@ class FeishuStreamClient:
     ):
         """
         Args:
-            app_id: 应用 ID（不传则从配置读取）
-            app_secret: 应用密钥（不传则从配置读取）
+            app_id: 應用 ID（不傳則從配置讀取）
+            app_secret: 應用密鑰（不傳則從配置讀取）
         """
         if not FEISHU_SDK_AVAILABLE:
             raise ImportError(
-                "lark-oapi SDK 未安装。\n"
-                "请运行: pip install lark-oapi"
+                "lark-oapi SDK 未安裝。\n"
+                "請運行: pip install lark-oapi"
             )
 
         from config import get_config
@@ -399,7 +399,7 @@ class FeishuStreamClient:
 
         if not self._app_id or not self._app_secret:
             raise ValueError(
-                "飞书 Stream 模式需要配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET"
+                "飛書 Stream 模式需要配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET"
             )
 
         self._ws_client: Optional[ws.Client] = None
@@ -408,7 +408,7 @@ class FeishuStreamClient:
         self._running = False
 
     def _create_message_handler(self) -> Callable[[BotMessage], BotResponse]:
-        """创建消息处理函数"""
+        """創建消息處理函數"""
 
         def handle_message(message: BotMessage) -> BotResponse:
             from bot.dispatcher import get_dispatcher
@@ -418,19 +418,19 @@ class FeishuStreamClient:
         return handle_message
 
     def _create_event_handler(self) -> 'lark.EventDispatcherHandler':
-        """创建事件分发处理器"""
-        # 创建回复客户端
+        """創建事件分發處理器"""
+        # 創建回覆客戶端
         self._reply_client = FeishuReplyClient(self._app_id, self._app_secret)
 
-        # 创建消息处理器
+        # 創建消息處理器
         handler = FeishuStreamHandler(
             self._create_message_handler(),
             self._reply_client
         )
 
-        # 创建并注册事件处理器
-        # 注意：encrypt_key 和 verification_token 在长连接模式下不是必需的
-        # 但 SDK 要求传入（可以为空字符串）
+        # 創建並註冊事件處理器
+        # 注意：encrypt_key 和 verification_token 在長連接模式下不是必需的
+        # 但 SDK 要求傳入（可以為空字符串）
         from config import get_config
         config = get_config()
         
@@ -449,16 +449,16 @@ class FeishuStreamClient:
 
     def start(self) -> None:
         """
-        启动 Stream 客户端（阻塞）
+        啟動 Stream 客戶端（阻塞）
         
-        此方法会阻塞当前线程，直到客户端停止。
+        此方法會阻塞當前線程，直到客戶端停止。
         """
-        logger.info("[Feishu Stream] 正在启动...")
+        logger.info("[Feishu Stream] 正在啟動...")
 
-        # 创建事件处理器
+        # 創建事件處理器
         event_handler = self._create_event_handler()
 
-        # 创建 WebSocket 客户端
+        # 創建 WebSocket 客戶端
         self._ws_client = ws.Client(
             app_id=self._app_id,
             app_secret=self._app_secret,
@@ -468,19 +468,19 @@ class FeishuStreamClient:
         )
 
         self._running = True
-        logger.info("[Feishu Stream] 客户端已启动，等待消息...")
+        logger.info("[Feishu Stream] 客戶端已啟動，等待消息...")
 
-        # 启动（阻塞）
+        # 啟動（阻塞）
         self._ws_client.start()
 
     def start_background(self) -> None:
         """
-        在后台线程启动 Stream 客户端（非阻塞）
+        在後臺線程啟動 Stream 客戶端（非阻塞）
         
-        适用于与其他服务（如 WebUI）同时运行的场景。
+        適用於與其他服務（如 WebUI）同時運行的場景。
         """
         if self._background_thread and self._background_thread.is_alive():
-            logger.warning("[Feishu Stream] 客户端已在运行")
+            logger.warning("[Feishu Stream] 客戶端已在運行")
             return
 
         self._running = True
@@ -490,45 +490,45 @@ class FeishuStreamClient:
             name="FeishuStreamClient"
         )
         self._background_thread.start()
-        logger.info("[Feishu Stream] 后台客户端已启动")
+        logger.info("[Feishu Stream] 後臺客戶端已啟動")
 
     def _run_in_background(self) -> None:
-        """后台运行（处理异常和重连）"""
+        """後臺運行（處理異常和重連）"""
         import time
 
         while self._running:
             try:
                 self.start()
             except Exception as e:
-                logger.error(f"[Feishu Stream] 运行异常: {e}")
+                logger.error(f"[Feishu Stream] 運行異常: {e}")
                 if self._running:
-                    logger.info("[Feishu Stream] 5 秒后重连...")
+                    logger.info("[Feishu Stream] 5 秒後重連...")
                     time.sleep(5)
 
     def stop(self) -> None:
-        """停止客户端"""
+        """停止客戶端"""
         self._running = False
-        logger.info("[Feishu Stream] 客户端已停止")
+        logger.info("[Feishu Stream] 客戶端已停止")
 
     @property
     def is_running(self) -> bool:
-        """是否正在运行"""
+        """是否正在運行"""
         return self._running
 
 
-# 全局客户端实例
+# 全局客戶端實例
 _stream_client: Optional[FeishuStreamClient] = None
 
 
 def get_feishu_stream_client() -> Optional[FeishuStreamClient]:
-    """获取全局 Stream 客户端实例"""
+    """獲取全局 Stream 客戶端實例"""
     global _stream_client
 
     if _stream_client is None and FEISHU_SDK_AVAILABLE:
         try:
             _stream_client = FeishuStreamClient()
         except (ImportError, ValueError) as e:
-            logger.warning(f"[Feishu Stream] 无法创建客户端: {e}")
+            logger.warning(f"[Feishu Stream] 無法創建客戶端: {e}")
             return None
 
     return _stream_client
@@ -536,10 +536,10 @@ def get_feishu_stream_client() -> Optional[FeishuStreamClient]:
 
 def start_feishu_stream_background() -> bool:
     """
-    在后台启动飞书 Stream 客户端
+    在後臺啟動飛書 Stream 客戶端
     
     Returns:
-        是否成功启动
+        是否成功啟動
     """
     client = get_feishu_stream_client()
     if client:

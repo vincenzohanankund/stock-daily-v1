@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - 存储层
+A股自選股智能分析系統 - 存儲層
 ===================================
 
-职责：
-1. 管理 SQLite 数据库连接（单例模式）
-2. 定义 ORM 数据模型
-3. 提供数据存取接口
-4. 实现智能更新逻辑（断点续传）
+職責：
+1. 管理 SQLite 數據庫連接（單例模式）
+2. 定義 ORM 數據模型
+3. 提供數據存取接口
+4. 實現智能更新邏輯（斷點續傳）
 """
 
 import logging
@@ -42,55 +42,55 @@ from config import get_config
 
 logger = logging.getLogger(__name__)
 
-# SQLAlchemy ORM 基类
+# SQLAlchemy ORM 基類
 Base = declarative_base()
 
 
-# === 数据模型定义 ===
+# === 數據模型定義 ===
 
 class StockDaily(Base):
     """
-    股票日线数据模型
+    股票日線數據模型
     
-    存储每日行情数据和计算的技术指标
-    支持多股票、多日期的唯一约束
+    存儲每日行情數據和計算的技術指標
+    支持多股票、多日期的唯一約束
     """
     __tablename__ = 'stock_daily'
     
-    # 主键
+    # 主鍵
     id = Column(Integer, primary_key=True, autoincrement=True)
     
-    # 股票代码（如 600519, 000001）
+    # 股票代碼（如 600519, 000001）
     code = Column(String(10), nullable=False, index=True)
     
     # 交易日期
     date = Column(Date, nullable=False, index=True)
     
-    # OHLC 数据
+    # OHLC 數據
     open = Column(Float)
     high = Column(Float)
     low = Column(Float)
     close = Column(Float)
     
-    # 成交数据
+    # 成交數據
     volume = Column(Float)  # 成交量（股）
-    amount = Column(Float)  # 成交额（元）
-    pct_chg = Column(Float)  # 涨跌幅（%）
+    amount = Column(Float)  # 成交額（元）
+    pct_chg = Column(Float)  # 漲跌幅（%）
     
-    # 技术指标
+    # 技術指標
     ma5 = Column(Float)
     ma10 = Column(Float)
     ma20 = Column(Float)
     volume_ratio = Column(Float)  # 量比
     
-    # 数据来源
-    data_source = Column(String(50))  # 记录数据来源（如 AkshareFetcher）
+    # 數據來源
+    data_source = Column(String(50))  # 記錄數據來源（如 AkshareFetcher）
     
-    # 更新时间
+    # 更新時間
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
-    # 唯一约束：同一股票同一日期只能有一条数据
+    # 唯一約束：同一股票同一日期只能有一條數據
     __table_args__ = (
         UniqueConstraint('code', 'date', name='uix_code_date'),
         Index('ix_code_date', 'code', 'date'),
@@ -100,7 +100,7 @@ class StockDaily(Base):
         return f"<StockDaily(code={self.code}, date={self.date}, close={self.close})>"
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """轉換為字典"""
         return {
             'code': self.code,
             'date': self.date,
@@ -121,18 +121,18 @@ class StockDaily(Base):
 
 class DatabaseManager:
     """
-    数据库管理器 - 单例模式
+    數據庫管理器 - 單例模式
     
-    职责：
-    1. 管理数据库连接池
+    職責：
+    1. 管理數據庫連接池
     2. 提供 Session 上下文管理
-    3. 封装数据存取操作
+    3. 封裝數據存取操作
     """
     
     _instance: Optional['DatabaseManager'] = None
     
     def __new__(cls, *args, **kwargs):
-        """单例模式实现"""
+        """單例模式實現"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -140,10 +140,10 @@ class DatabaseManager:
     
     def __init__(self, db_url: Optional[str] = None):
         """
-        初始化数据库管理器
+        初始化數據庫管理器
         
         Args:
-            db_url: 数据库连接 URL（可选，默认从配置读取）
+            db_url: 數據庫連接 URL（可選，默認從配置讀取）
         """
         if self._initialized:
             return
@@ -152,47 +152,47 @@ class DatabaseManager:
             config = get_config()
             db_url = config.get_db_url()
         
-        # 创建数据库引擎
+        # 創建數據庫引擎
         self._engine = create_engine(
             db_url,
-            echo=False,  # 设为 True 可查看 SQL 语句
-            pool_pre_ping=True,  # 连接健康检查
+            echo=False,  # 設為 True 可查看 SQL 語句
+            pool_pre_ping=True,  # 連接健康檢查
         )
         
-        # 创建 Session 工厂
+        # 創建 Session 工廠
         self._SessionLocal = sessionmaker(
             bind=self._engine,
             autocommit=False,
             autoflush=False,
         )
         
-        # 创建所有表
+        # 創建所有表
         Base.metadata.create_all(self._engine)
         
         self._initialized = True
-        logger.info(f"数据库初始化完成: {db_url}")
+        logger.info(f"數據庫初始化完成: {db_url}")
     
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
-        """获取单例实例"""
+        """獲取單例實例"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
     
     @classmethod
     def reset_instance(cls) -> None:
-        """重置单例（用于测试）"""
+        """重置單例（用於測試）"""
         if cls._instance is not None:
             cls._instance._engine.dispose()
             cls._instance = None
     
     def get_session(self) -> Session:
         """
-        获取数据库 Session
+        獲取數據庫 Session
         
         使用示例:
             with db.get_session() as session:
-                # 执行查询
+                # 執行查詢
                 session.commit()  # 如果需要
         """
         session = self._SessionLocal()
@@ -204,16 +204,16 @@ class DatabaseManager:
     
     def has_today_data(self, code: str, target_date: Optional[date] = None) -> bool:
         """
-        检查是否已有指定日期的数据
+        檢查是否已有指定日期的數據
         
-        用于断点续传逻辑：如果已有数据则跳过网络请求
+        用於斷點續傳邏輯：如果已有數據則跳過網絡請求
         
         Args:
-            code: 股票代码
-            target_date: 目标日期（默认今天）
+            code: 股票代碼
+            target_date: 目標日期（默認今天）
             
         Returns:
-            是否存在数据
+            是否存在數據
         """
         if target_date is None:
             target_date = date.today()
@@ -236,16 +236,16 @@ class DatabaseManager:
         days: int = 2
     ) -> List[StockDaily]:
         """
-        获取最近 N 天的数据
+        獲取最近 N 天的數據
         
-        用于计算"相比昨日"的变化
+        用於計算"相比昨日"的變化
         
         Args:
-            code: 股票代码
-            days: 获取天数
+            code: 股票代碼
+            days: 獲取天數
             
         Returns:
-            StockDaily 对象列表（按日期降序）
+            StockDaily 對象列表（按日期降序）
         """
         with self.get_session() as session:
             results = session.execute(
@@ -264,15 +264,15 @@ class DatabaseManager:
         end_date: date
     ) -> List[StockDaily]:
         """
-        获取指定日期范围的数据
+        獲取指定日期範圍的數據
         
         Args:
-            code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
+            code: 股票代碼
+            start_date: 開始日期
+            end_date: 結束日期
             
         Returns:
-            StockDaily 对象列表
+            StockDaily 對象列表
         """
         with self.get_session() as session:
             results = session.execute(
@@ -296,22 +296,22 @@ class DatabaseManager:
         data_source: str = "Unknown"
     ) -> int:
         """
-        保存日线数据到数据库
+        保存日線數據到數據庫
         
         策略：
-        - 使用 UPSERT 逻辑（存在则更新，不存在则插入）
-        - 跳过已存在的数据，避免重复
+        - 使用 UPSERT 邏輯（存在則更新，不存在則插入）
+        - 跳過已存在的數據，避免重複
         
         Args:
-            df: 包含日线数据的 DataFrame
-            code: 股票代码
-            data_source: 数据来源名称
+            df: 包含日線數據的 DataFrame
+            code: 股票代碼
+            data_source: 數據來源名稱
             
         Returns:
-            新增/更新的记录数
+            新增/更新的記錄數
         """
         if df is None or df.empty:
-            logger.warning(f"保存数据为空，跳过 {code}")
+            logger.warning(f"保存數據為空，跳過 {code}")
             return 0
         
         saved_count = 0
@@ -328,7 +328,7 @@ class DatabaseManager:
                     elif isinstance(row_date, pd.Timestamp):
                         row_date = row_date.date()
                     
-                    # 检查是否已存在
+                    # 檢查是否已存在
                     existing = session.execute(
                         select(StockDaily).where(
                             and_(
@@ -339,7 +339,7 @@ class DatabaseManager:
                     ).scalar_one_or_none()
                     
                     if existing:
-                        # 更新现有记录
+                        # 更新現有記錄
                         existing.open = row.get('open')
                         existing.high = row.get('high')
                         existing.low = row.get('low')
@@ -354,7 +354,7 @@ class DatabaseManager:
                         existing.data_source = data_source
                         existing.updated_at = datetime.now()
                     else:
-                        # 创建新记录
+                        # 創建新記錄
                         record = StockDaily(
                             code=code,
                             date=row_date,
@@ -375,11 +375,11 @@ class DatabaseManager:
                         saved_count += 1
                 
                 session.commit()
-                logger.info(f"保存 {code} 数据成功，新增 {saved_count} 条")
+                logger.info(f"保存 {code} 數據成功，新增 {saved_count} 條")
                 
             except Exception as e:
                 session.rollback()
-                logger.error(f"保存 {code} 数据失败: {e}")
+                logger.error(f"保存 {code} 數據失敗: {e}")
                 raise
         
         return saved_count
@@ -390,25 +390,25 @@ class DatabaseManager:
         target_date: Optional[date] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        获取分析所需的上下文数据
+        獲取分析所需的上下文數據
         
-        返回今日数据 + 昨日数据的对比信息
+        返回今日數據 + 昨日數據的對比信息
         
         Args:
-            code: 股票代码
-            target_date: 目标日期（默认今天）
+            code: 股票代碼
+            target_date: 目標日期（默認今天）
             
         Returns:
-            包含今日数据、昨日对比等信息的字典
+            包含今日數據、昨日對比等信息的字典
         """
         if target_date is None:
             target_date = date.today()
         
-        # 获取最近2天数据
+        # 獲取最近2天數據
         recent_data = self.get_latest_data(code, days=2)
         
         if not recent_data:
-            logger.warning(f"未找到 {code} 的数据")
+            logger.warning(f"未找到 {code} 的數據")
             return None
         
         today_data = recent_data[0]
@@ -423,7 +423,7 @@ class DatabaseManager:
         if yesterday_data:
             context['yesterday'] = yesterday_data.to_dict()
             
-            # 计算相比昨日的变化
+            # 計算相比昨日的變化
             if yesterday_data.volume and yesterday_data.volume > 0:
                 context['volume_change_ratio'] = round(
                     today_data.volume / yesterday_data.volume, 2
@@ -434,19 +434,19 @@ class DatabaseManager:
                     (today_data.close - yesterday_data.close) / yesterday_data.close * 100, 2
                 )
             
-            # 均线形态判断
+            # 均線形態判斷
             context['ma_status'] = self._analyze_ma_status(today_data)
         
         return context
     
     def _analyze_ma_status(self, data: StockDaily) -> str:
         """
-        分析均线形态
+        分析均線形態
         
-        判断条件：
-        - 多头排列：close > ma5 > ma10 > ma20
-        - 空头排列：close < ma5 < ma10 < ma20
-        - 震荡整理：其他情况
+        判斷條件：
+        - 多頭排列：close > ma5 > ma10 > ma20
+        - 空頭排列：close < ma5 < ma10 < ma20
+        - 震盪整理：其他情況
         """
         close = data.close or 0
         ma5 = data.ma5 or 0
@@ -454,37 +454,37 @@ class DatabaseManager:
         ma20 = data.ma20 or 0
         
         if close > ma5 > ma10 > ma20 > 0:
-            return "多头排列 📈"
+            return "多頭排列 📈"
         elif close < ma5 < ma10 < ma20 and ma20 > 0:
-            return "空头排列 📉"
+            return "空頭排列 📉"
         elif close > ma5 and ma5 > ma10:
             return "短期向好 🔼"
         elif close < ma5 and ma5 < ma10:
             return "短期走弱 🔽"
         else:
-            return "震荡整理 ↔️"
+            return "震盪整理 ↔️"
 
 
-# 便捷函数
+# 便捷函數
 def get_db() -> DatabaseManager:
-    """获取数据库管理器实例的快捷方式"""
+    """獲取數據庫管理器實例的快捷方式"""
     return DatabaseManager.get_instance()
 
 
 if __name__ == "__main__":
-    # 测试代码
+    # 測試代碼
     logging.basicConfig(level=logging.DEBUG)
     
     db = get_db()
     
-    print("=== 数据库测试 ===")
-    print(f"数据库初始化成功")
+    print("=== 數據庫測試 ===")
+    print(f"數據庫初始化成功")
     
-    # 测试检查今日数据
+    # 測試檢查今日數據
     has_data = db.has_today_data('600519')
-    print(f"茅台今日是否有数据: {has_data}")
+    print(f"茅臺今日是否有數據: {has_data}")
     
-    # 测试保存数据
+    # 測試保存數據
     test_df = pd.DataFrame({
         'date': [date.today()],
         'open': [1800.0],
@@ -501,8 +501,8 @@ if __name__ == "__main__":
     })
     
     saved = db.save_daily_data(test_df, '600519', 'TestSource')
-    print(f"保存测试数据: {saved} 条")
+    print(f"保存測試數據: {saved} 條")
     
-    # 测试获取上下文
+    # 測試獲取上下文
     context = db.get_analysis_context('600519')
     print(f"分析上下文: {context}")
