@@ -261,40 +261,45 @@ class DataFetcherManager:
         初始化默認數據源列表
 
         優先級動態調整邏輯：
-        - 如果配置了 TUSHARE_TOKEN：Tushare 優先級提升為 0（最高）
+        - 如果配置了 FINMIND_TOKEN：FinMind 優先級為 -1（最高，台股專用）
+        - 如果配置了 TUSHARE_TOKEN：Tushare 優先級提升為 0（A股專用）
         - 否則按默認優先級：
-          0. EfinanceFetcher (Priority 0) - 最高優先級
-          1. AkshareFetcher (Priority 1)
-          2. TushareFetcher (Priority 2)
-          3. BaostockFetcher (Priority 3)
-          4. YfinanceFetcher (Priority 4)
+          -1. FinMindFetcher (Priority -1) - 台股最高優先級
+          0. YfinanceFetcher (Priority 0) - 台股/港股/美股通用
+          0. EfinanceFetcher (Priority 0) - A股
+          1. AkshareFetcher (Priority 1) - A股
+          2. TushareFetcher (Priority 2) - A股
+          3. BaostockFetcher (Priority 3) - A股
         """
+        from .finmind_fetcher import FinMindFetcher
+        from .yfinance_fetcher import YfinanceFetcher
         from .efinance_fetcher import EfinanceFetcher
         from .akshare_fetcher import AkshareFetcher
         from .tushare_fetcher import TushareFetcher
         from .baostock_fetcher import BaostockFetcher
-        from .yfinance_fetcher import YfinanceFetcher
         from config import get_config
 
         config = get_config()
 
         # 創建所有數據源實例（優先級在各 Fetcher 的 __init__ 中確定）
-        efinance = EfinanceFetcher()
-        akshare = AkshareFetcher()
-        tushare = TushareFetcher()  # 會根據 Token 配置自動調整優先級
-        baostock = BaostockFetcher()
-        yfinance = YfinanceFetcher()
+        finmind = FinMindFetcher(api_token=config.finmind_token)  # 台股專用，優先級 -1
+        yfinance = YfinanceFetcher()  # 多市場通用，優先級 0
+        efinance = EfinanceFetcher()  # A股
+        akshare = AkshareFetcher()    # A股
+        tushare = TushareFetcher()    # A股（會根據 Token 配置自動調整優先級）
+        baostock = BaostockFetcher()  # A股
 
         # 初始化數據源列表
         self._fetchers = [
-            efinance,
-            akshare,
-            tushare,
-            baostock,
-            yfinance,
+            finmind,   # 台股首選
+            yfinance,  # 通用數據源
+            efinance,  # A股備選
+            akshare,   # A股備選
+            tushare,   # A股備選
+            baostock,  # A股備選
         ]
 
-        # 按優先級排序（Tushare 如果配置了 Token 且初始化成功，優先級為 0）
+        # 按優先級排序
         self._fetchers.sort(key=lambda f: f.priority)
 
         # 構建優先級說明

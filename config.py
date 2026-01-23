@@ -37,6 +37,7 @@ class Config:
     feishu_folder_token: Optional[str] = None  # 目標文件夾 Token
 
     # === 數據源 API Token ===
+    finmind_token: Optional[str] = None  # FinMind API Token（台股專用，https://finmindtrade.com/）
     tushare_token: Optional[str] = None
     
     # === AI 分析配置 ===
@@ -215,6 +216,7 @@ class Config:
             feishu_app_id=os.getenv('FEISHU_APP_ID'),
             feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
+            finmind_token=os.getenv('FINMIND_TOKEN'),
             tushare_token=os.getenv('TUSHARE_TOKEN'),
             gemini_api_key=os.getenv('GEMINI_API_KEY'),
             gemini_model=os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview'),
