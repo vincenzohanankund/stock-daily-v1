@@ -1,6 +1,6 @@
 # 🚀 部署指南
 
-本文檔介紹如何將 A股自選股智能分析系統部署到服務器。
+本文檔介紹如何將台股智能分析系統部署到服務器。
 
 ## 📋 部署方案對比
 
@@ -141,7 +141,7 @@ sudo vim /etc/systemd/system/stock-analyzer.service
 內容：
 ```ini
 [Unit]
-Description=A股自選股智能分析系統
+Description=台股智能分析系統
 After=network.target
 
 [Service]

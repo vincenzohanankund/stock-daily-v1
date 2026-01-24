@@ -198,10 +198,11 @@ daily_stock_analysis/
 ├── config.py            # 配置管理
 ├── webui.py             # WebUI 入口
 ├── data_provider/       # 數據源適配器
-│   ├── akshare_fetcher.py
-│   ├── tushare_fetcher.py
-│   ├── baostock_fetcher.py
-│   └── yfinance_fetcher.py
+│   ├── finmind_fetcher.py   # FinMind API（台股專用）
+│   ├── yfinance_fetcher.py  # Yahoo Finance（多市場）
+│   ├── akshare_fetcher.py   # AkShare（A股）
+│   ├── tushare_fetcher.py   # Tushare（A股）
+│   └── baostock_fetcher.py  # Baostock（A股）
 ├── web/                 # WebUI 模塊
 │   ├── server.py        # HTTP 服務器
 │   ├── router.py        # 路由管理
@@ -231,20 +232,22 @@ daily_stock_analysis/
 - [x] 本地模型（Ollama）
 
 ### 📊 數據源擴展
-- [x] AkShare（免費）
-- [x] Tushare Pro
-- [x] Baostock
-- [x] YFinance
+- [x] FinMind（台股專用，最詳細）
+- [x] YFinance（多市場通用）
+- [x] AkShare（A股）
+- [x] Tushare Pro（A股）
+- [x] Baostock（A股）
 
 ### 🎯 功能增強
 - [x] 決策儀表盤
 - [x] 大盤覆盤
 - [x] 定時推送
 - [x] GitHub Actions
+- [x] 台股支持（完整支援，含籌碼面數據）
 - [x] 港股支持
+- [x] 美股支持
 - [x] Web 管理界面 (簡易版)
 - [ ] 歷史分析回測
-- [ ] 美股支持
 
 ## 🤝 貢獻
 
