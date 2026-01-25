@@ -51,6 +51,9 @@ jobs:
           
           # 数据源 (可选)
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          LONGPORT_APP_KEY: ${{ secrets.LONGPORT_APP_KEY }}
+          LONGPORT_APP_SECRET: ${{ secrets.LONGPORT_APP_SECRET }}
+          LONGPORT_ACCESS_TOKEN: ${{ secrets.LONGPORT_ACCESS_TOKEN }}
           
           # 搜索服务
           BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
