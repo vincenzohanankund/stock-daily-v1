@@ -55,6 +55,12 @@ class Config:
     openai_base_url: Optional[str] = None  # 如: https://api.openai.com/v1
     openai_model: str = "gpt-4o-mini"  # OpenAI 兼容模型名称
     openai_temperature: float = 0.7  # OpenAI 温度参数（0.0-2.0，默认0.7）
+
+    # DeepSeek API（第三备选，当 Gemini 和 OpenAI 都不可用时使用）
+    deepseek_api_key: Optional[str] = None
+    deepseek_base_url: str = "https://api.deepseek.com"  # DeepSeek API 地址
+    deepseek_model: str = "deepseek-chat"  # DeepSeek 模型名称
+    deepseek_temperature: float = 0.7  # DeepSeek 温度参数（0.0-2.0，默认0.7）
     
     # === 搜索引擎配置（支持多 Key 负载均衡）===
     bocha_api_keys: List[str] = field(default_factory=list)  # Bocha API Keys
@@ -301,6 +307,10 @@ class Config:
             openai_base_url=os.getenv('OPENAI_BASE_URL'),
             openai_model=os.getenv('OPENAI_MODEL', 'gpt-4o-mini'),
             openai_temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
+            deepseek_api_key=os.getenv('DEEPSEEK_API_KEY'),
+            deepseek_base_url=os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
+            deepseek_model=os.getenv('DEEPSEEK_MODEL', 'deepseek-chat'),
+            deepseek_temperature=float(os.getenv('DEEPSEEK_TEMPERATURE', '0.7')),
             bocha_api_keys=bocha_api_keys,
             tavily_api_keys=tavily_api_keys,
             serpapi_keys=serpapi_keys,

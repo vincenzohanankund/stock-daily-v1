@@ -156,6 +156,12 @@ def parse_arguments() -> argparse.Namespace:
     )
     
     parser.add_argument(
+        '--ai-dry-run',
+        action='store_true',
+        help='AI 省钱模式：生成 Prompt 并保存到本地，不调用 AI API（可人工分析）'
+    )
+    
+    parser.add_argument(
         '--stocks',
         type=str,
         help='指定要分析的股票代码，逗号分隔（覆盖配置文件）'
@@ -238,6 +244,7 @@ def run_full_analysis(
         results = pipeline.run(
             stock_codes=stock_codes,
             dry_run=args.dry_run,
+            ai_dry_run=getattr(args, 'ai_dry_run', False),
             send_notification=not args.no_notify
         )
 

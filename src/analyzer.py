@@ -12,8 +12,11 @@ A股自选股智能分析系统 - AI分析层
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from tenacity import (
@@ -68,6 +71,8 @@ STOCK_NAME_MAP = {
     'LI': '理想汽车',
     'COIN': 'Coinbase',
     'MSTR': 'MicroStrategy',
+    'FIG': 'Figma',
+    'CRWV': 'Corewave',
 
     # === 港股 (5位数字) ===
     '00700': '腾讯控股',
@@ -436,6 +441,8 @@ class GeminiAnalyzer:
         self._using_fallback = False  # 是否正在使用备选模型
         self._use_openai = False  # 是否使用 OpenAI 兼容 API
         self._openai_client = None  # OpenAI 客户端
+        self._use_deepseek = False  # 是否使用 DeepSeek API
+        self._deepseek_client = None  # DeepSeek 客户端
         
         # 检查 Gemini API Key 是否有效（过滤占位符）
         gemini_key_valid = self._api_key and not self._api_key.startswith('your_') and len(self._api_key) > 10
@@ -452,8 +459,13 @@ class GeminiAnalyzer:
             logger.info("Gemini API Key 未配置，尝试使用 OpenAI 兼容 API")
             self._init_openai_fallback()
         
-        # 两者都未配置
+        # Gemini 和 OpenAI 都未配置，尝试 DeepSeek
         if not self._model and not self._openai_client:
+            logger.info("Gemini 和 OpenAI 都未配置，尝试使用 DeepSeek API")
+            self._init_deepseek_fallback()
+        
+        # 三者都未配置
+        if not self._model and not self._openai_client and not self._deepseek_client:
             logger.warning("未配置任何 AI API Key，AI 分析功能将不可用")
     
     def _init_openai_fallback(self) -> None:
@@ -508,6 +520,52 @@ class GeminiAnalyzer:
                 logger.error(f"OpenAI 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
             else:
                 logger.error(f"OpenAI 兼容 API 初始化失败: {e}")
+    
+    def _init_deepseek_fallback(self) -> None:
+        """
+        初始化 DeepSeek API 作为第三备选
+        
+        DeepSeek 使用 OpenAI 兼容的 API 格式
+        """
+        config = get_config()
+        
+        # 检查 DeepSeek API Key 是否有效（过滤占位符）
+        deepseek_key_valid = (
+            config.deepseek_api_key and 
+            not config.deepseek_api_key.startswith('your_') and 
+            len(config.deepseek_api_key) > 10
+        )
+        
+        if not deepseek_key_valid:
+            logger.debug("DeepSeek API 未配置或配置无效")
+            return
+        
+        # 分离 import 和客户端创建
+        try:
+            from openai import OpenAI
+        except ImportError:
+            logger.error("未安装 openai 库，请运行: pip install openai")
+            return
+        
+        try:
+            self._deepseek_client = OpenAI(
+                api_key=config.deepseek_api_key,
+                base_url=config.deepseek_base_url,
+            )
+            self._current_model_name = config.deepseek_model
+            self._use_deepseek = True
+            logger.info(f"DeepSeek API 初始化成功 (base_url: {config.deepseek_base_url}, model: {config.deepseek_model})")
+        except ImportError as e:
+            if 'socksio' in str(e).lower() or 'socks' in str(e).lower():
+                logger.error(f"DeepSeek 客户端需要 SOCKS 代理支持，请运行: pip install httpx[socks] 或 pip install socksio")
+            else:
+                logger.error(f"DeepSeek 依赖缺失: {e}")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'socks' in error_msg or 'socksio' in error_msg or 'proxy' in error_msg:
+                logger.error(f"DeepSeek 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
+            else:
+                logger.error(f"DeepSeek API 初始化失败: {e}")
     
     def _init_model(self) -> None:
         """
@@ -582,7 +640,7 @@ class GeminiAnalyzer:
     
     def is_available(self) -> bool:
         """检查分析器是否可用"""
-        return self._model is not None or self._openai_client is not None
+        return self._model is not None or self._openai_client is not None or self._deepseek_client is not None
     
     def _call_openai_api(self, prompt: str, generation_config: dict) -> str:
         """
@@ -637,6 +695,58 @@ class GeminiAnalyzer:
         
         raise Exception("OpenAI API 调用失败，已达最大重试次数")
     
+    def _call_deepseek_api(self, prompt: str, generation_config: dict) -> str:
+        """
+        调用 DeepSeek API
+        
+        Args:
+            prompt: 提示词
+            generation_config: 生成配置
+            
+        Returns:
+            响应文本
+        """
+        config = get_config()
+        max_retries = config.gemini_max_retries
+        base_delay = config.gemini_retry_delay
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    delay = min(delay, 60)
+                    logger.info(f"[DeepSeek] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
+                    time.sleep(delay)
+                
+                response = self._deepseek_client.chat.completions.create(
+                    model=self._current_model_name,
+                    messages=[
+                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=generation_config.get('temperature', config.deepseek_temperature),
+                    max_tokens=generation_config.get('max_output_tokens', 8192),
+                )
+                
+                if response and response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content
+                else:
+                    raise ValueError("DeepSeek API 返回空响应")
+                    
+            except Exception as e:
+                error_str = str(e)
+                is_rate_limit = '429' in error_str or 'rate' in error_str.lower() or 'quota' in error_str.lower()
+                
+                if is_rate_limit:
+                    logger.warning(f"[DeepSeek] API 限流，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
+                else:
+                    logger.warning(f"[DeepSeek] API 调用失败，第 {attempt + 1}/{max_retries} 次尝试: {error_str[:100]}")
+                
+                if attempt == max_retries - 1:
+                    raise
+        
+        raise Exception("DeepSeek API 调用失败，已达最大重试次数")
+    
     def _call_api_with_retry(self, prompt: str, generation_config: dict) -> str:
         """
         调用 AI API，带有重试和模型切换机制
@@ -655,6 +765,10 @@ class GeminiAnalyzer:
         Returns:
             响应文本
         """
+        # 如果已经在使用 DeepSeek 模式，直接调用 DeepSeek
+        if self._use_deepseek:
+            return self._call_deepseek_api(prompt, generation_config)
+        
         # 如果已经在使用 OpenAI 模式，直接调用 OpenAI
         if self._use_openai:
             return self._call_openai_api(prompt, generation_config)
@@ -714,7 +828,7 @@ class GeminiAnalyzer:
                 return self._call_openai_api(prompt, generation_config)
             except Exception as openai_error:
                 logger.error(f"[OpenAI] 备选 API 也失败: {openai_error}")
-                raise last_error or openai_error
+                # 继续尝试 DeepSeek
         elif config.openai_api_key and config.openai_base_url:
             # 尝试懒加载初始化 OpenAI
             logger.warning("[Gemini] 所有重试失败，尝试初始化 OpenAI 兼容 API")
@@ -724,7 +838,26 @@ class GeminiAnalyzer:
                     return self._call_openai_api(prompt, generation_config)
                 except Exception as openai_error:
                     logger.error(f"[OpenAI] 备选 API 也失败: {openai_error}")
-                    raise last_error or openai_error
+                    # 继续尝试 DeepSeek
+        
+        # OpenAI 也失败，尝试 DeepSeek API
+        if self._deepseek_client:
+            logger.warning("[OpenAI] 所有重试失败，切换到 DeepSeek API")
+            try:
+                return self._call_deepseek_api(prompt, generation_config)
+            except Exception as deepseek_error:
+                logger.error(f"[DeepSeek] 备选 API 也失败: {deepseek_error}")
+                raise last_error or deepseek_error
+        elif config.deepseek_api_key:
+            # 尝试懒加载初始化 DeepSeek
+            logger.warning("[OpenAI] 所有重试失败，尝试初始化 DeepSeek API")
+            self._init_deepseek_fallback()
+            if self._deepseek_client:
+                try:
+                    return self._call_deepseek_api(prompt, generation_config)
+                except Exception as deepseek_error:
+                    logger.error(f"[DeepSeek] 备选 API 也失败: {deepseek_error}")
+                    raise last_error or deepseek_error
         
         # 所有方式都失败
         raise last_error or Exception("所有 AI API 调用失败，已达最大重试次数")
@@ -732,7 +865,8 @@ class GeminiAnalyzer:
     def analyze(
         self, 
         context: Dict[str, Any],
-        news_context: Optional[str] = None
+        news_context: Optional[str] = None,
+        dry_run: bool = False
     ) -> AnalysisResult:
         """
         分析单只股票
@@ -746,6 +880,7 @@ class GeminiAnalyzer:
         Args:
             context: 从 storage.get_analysis_context() 获取的上下文数据
             news_context: 预先搜索的新闻内容（可选）
+            dry_run: 干跑模式，只生成 Prompt 不调用 API（省钱模式）
             
         Returns:
             AnalysisResult 对象
@@ -770,7 +905,7 @@ class GeminiAnalyzer:
                 name = STOCK_NAME_MAP.get(code, f'股票{code}')
         
         # 如果模型不可用，返回默认结果
-        if not self.is_available():
+        if not self.is_available() and not dry_run:
             return AnalysisResult(
                 code=code,
                 name=name,
@@ -787,6 +922,29 @@ class GeminiAnalyzer:
         try:
             # 格式化输入（包含技术面数据和新闻）
             prompt = self._format_prompt(context, name, news_context)
+            
+            # ========== 固化上下文数据到本地 ==========
+            self._save_context_data(code, name, context, news_context, prompt)
+            
+            # ========== 干跑模式：只生成 Prompt，不调用 API ==========
+            if dry_run:
+                logger.info(f"[DRY RUN] {name}({code}) Prompt 已生成并保存，跳过 API 调用")
+                logger.info(f"[DRY RUN] Prompt 文件: reports/context/prompt_{code}.md")
+                return AnalysisResult(
+                    code=code,
+                    name=name,
+                    sentiment_score=50,
+                    trend_prediction='待人工分析',
+                    operation_advice='观望',
+                    confidence_level='低',
+                    analysis_summary=f'[DRY RUN] Prompt 已保存到 reports/context/prompt_{code}.md，请人工分析',
+                    key_points='干跑模式，未调用 AI API',
+                    risk_warning='请查看保存的 Prompt 文件进行人工分析',
+                    data_sources='技术面数据 + 消息面数据（如有）',
+                    search_performed=bool(news_context),
+                    success=True,
+                    error_message=None,
+                )
             
             # 获取模型名称
             model_name = getattr(self, '_current_model_name', None)
@@ -850,6 +1008,80 @@ class GeminiAnalyzer:
                 success=False,
                 error_message=str(e),
             )
+    
+    def _save_context_data(
+        self,
+        code: str,
+        name: str,
+        context: Dict[str, Any],
+        news_context: Optional[str],
+        prompt: str
+    ) -> None:
+        """
+        固化技术面和消息面数据到本地文件
+        
+        保存内容：
+        1. context_data_{code}.json - 原始上下文数据（技术面 + 消息面）
+        2. prompt_{code}.md - 生成的完整 Prompt（可读性更好）
+        
+        保存目录：reports/context/
+        
+        Args:
+            code: 股票代码
+            name: 股票名称
+            context: 技术面数据上下文
+            news_context: 消息面新闻内容
+            prompt: 生成的完整 Prompt
+        """
+        try:
+            # 确定保存目录
+            base_dir = Path(__file__).parent.parent / 'reports'
+            context_dir = base_dir / 'context'
+            context_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 生成时间戳
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            date_str = context.get('date', datetime.now().strftime('%Y-%m-%d'))
+            
+            # ========== 1. 保存原始上下文数据（JSON 格式）==========
+            context_data = {
+                'meta': {
+                    'code': code,
+                    'name': name,
+                    'date': date_str,
+                    'saved_at': datetime.now().isoformat(),
+                    'has_news': bool(news_context),
+                },
+                'technical_data': context,  # 技术面数据
+                'news_data': news_context,  # 消息面数据
+            }
+            
+            json_file = context_dir / f'context_data_{code}.json'
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(context_data, f, ensure_ascii=False, indent=2, default=str)
+            
+            logger.info(f"[固化] 上下文数据已保存: {json_file}")
+            
+            # ========== 2. 保存完整 Prompt（Markdown 格式，便于阅读）==========
+            prompt_file = context_dir / f'prompt_{code}.md'
+            prompt_content = f"""# AI 分析 Prompt - {name}({code})
+
+> 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+> 数据日期: {date_str}
+> 是否包含新闻: {'是' if news_context else '否'}
+
+---
+
+{prompt}
+"""
+            with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(prompt_content)
+            
+            logger.info(f"[固化] Prompt 已保存: {prompt_file}")
+            
+        except Exception as e:
+            # 保存失败不影响主流程
+            logger.warning(f"[固化] 保存上下文数据失败: {e}")
     
     def _format_prompt(
         self, 
@@ -1194,7 +1426,8 @@ class GeminiAnalyzer:
     def batch_analyze(
         self, 
         contexts: List[Dict[str, Any]],
-        delay_between: float = 2.0
+        delay_between: float = 2.0,
+        dry_run: bool = False
     ) -> List[AnalysisResult]:
         """
         批量分析多只股票
@@ -1204,6 +1437,7 @@ class GeminiAnalyzer:
         Args:
             contexts: 上下文数据列表
             delay_between: 每次分析之间的延迟（秒）
+            dry_run: 干跑模式，只生成 Prompt 不调用 API（省钱模式）
             
         Returns:
             AnalysisResult 列表
@@ -1211,11 +1445,11 @@ class GeminiAnalyzer:
         results = []
         
         for i, context in enumerate(contexts):
-            if i > 0:
+            if i > 0 and not dry_run:
                 logger.debug(f"等待 {delay_between} 秒后继续...")
                 time.sleep(delay_between)
             
-            result = self.analyze(context)
+            result = self.analyze(context, dry_run=dry_run)
             results.append(result)
         
         return results

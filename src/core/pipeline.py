@@ -137,7 +137,7 @@ class StockAnalysisPipeline:
             logger.error(f"[{code}] {error_msg}")
             return False, error_msg
     
-    def analyze_stock(self, code: str) -> Optional[AnalysisResult]:
+    def analyze_stock(self, code: str, ai_dry_run: bool = False) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
         
@@ -151,6 +151,7 @@ class StockAnalysisPipeline:
         
         Args:
             code: 股票代码
+            ai_dry_run: AI 省钱模式，只生成 Prompt 不调用 API
             
         Returns:
             AnalysisResult 或 None（如果分析失败）
@@ -219,17 +220,17 @@ class StockAnalysisPipeline:
                 intel_results = self.search_service.search_comprehensive_intel(
                     stock_code=code,
                     stock_name=stock_name,
-                    max_searches=3
+                    max_searches=4  # 美股需要4次搜索（3英文+1中文）
                 )
                 
                 # 格式化情报报告
                 if intel_results:
-                    news_context = self.search_service.format_intel_report(intel_results, stock_name)
+                    news_context = self.search_service.format_intel_report(intel_results, stock_name, code)
                     total_results = sum(
                         len(r.results) for r in intel_results.values() if r.success
                     )
-                    logger.info(f"[{code}] 情报搜索完成: 共 {total_results} 条结果")
-                    logger.debug(f"[{code}] 情报搜索结果:\n{news_context}")
+                    logger.info(f"[{code}] [{stock_name}] 情报搜索完成: 共 {total_results} 条结果")
+                    logger.debug(f"[{code}] [{stock_name}] 情报搜索结果:\n{news_context}")
             else:
                 logger.info(f"[{code}] 搜索服务不可用，跳过情报搜索")
             
@@ -250,7 +251,7 @@ class StockAnalysisPipeline:
             )
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
-            result = self.analyzer.analyze(enhanced_context, news_context=news_context)
+            result = self.analyzer.analyze(enhanced_context, news_context=news_context, dry_run=ai_dry_run)
             
             return result
             
@@ -362,6 +363,7 @@ class StockAnalysisPipeline:
         self,
         code: str,
         skip_analysis: bool = False,
+        ai_dry_run: bool = False,
         single_stock_notify: bool = False,
         report_type: ReportType = ReportType.SIMPLE
     ) -> Optional[AnalysisResult]:
@@ -379,6 +381,7 @@ class StockAnalysisPipeline:
         Args:
             code: 股票代码
             skip_analysis: 是否跳过 AI 分析
+            ai_dry_run: AI 省钱模式，只生成 Prompt 不调用 API
             single_stock_notify: 是否启用单股推送模式（每分析完一只立即推送）
             report_type: 报告类型枚举（从配置读取，Issue #119）
 
@@ -400,7 +403,7 @@ class StockAnalysisPipeline:
                 logger.info(f"[{code}] 跳过 AI 分析（dry-run 模式）")
                 return None
             
-            result = self.analyze_stock(code)
+            result = self.analyze_stock(code, ai_dry_run=ai_dry_run)
             
             if result:
                 logger.info(
@@ -409,7 +412,8 @@ class StockAnalysisPipeline:
                 )
                 
                 # 单股推送模式（#55）：每分析完一只股票立即推送
-                if single_stock_notify and self.notifier.is_available():
+                # AI 省钱模式下不推送（因为结果是占位符）
+                if single_stock_notify and self.notifier.is_available() and not ai_dry_run:
                     try:
                         # 根据报告类型选择生成方法
                         if report_type == ReportType.FULL:
@@ -439,6 +443,7 @@ class StockAnalysisPipeline:
         self, 
         stock_codes: Optional[List[str]] = None,
         dry_run: bool = False,
+        ai_dry_run: bool = False,
         send_notification: bool = True
     ) -> List[AnalysisResult]:
         """
@@ -453,6 +458,7 @@ class StockAnalysisPipeline:
         Args:
             stock_codes: 股票代码列表（可选，默认使用配置中的自选股）
             dry_run: 是否仅获取数据不分析
+            ai_dry_run: AI 省钱模式，只生成 Prompt 不调用 API
             send_notification: 是否发送推送通知
             
         Returns:
@@ -471,7 +477,8 @@ class StockAnalysisPipeline:
         
         logger.info(f"===== 开始分析 {len(stock_codes)} 只股票 =====")
         logger.info(f"股票列表: {', '.join(stock_codes)}")
-        logger.info(f"并发数: {self.max_workers}, 模式: {'仅获取数据' if dry_run else '完整分析'}")
+        mode_desc = '仅获取数据' if dry_run else ('AI省钱模式' if ai_dry_run else '完整分析')
+        logger.info(f"并发数: {self.max_workers}, 模式: {mode_desc}")
         
         # === 批量预取实时行情（优化：避免每只股票都触发全量拉取）===
         # 只有股票数量 >= 5 时才进行预取，少量股票直接逐个查询更高效
@@ -502,6 +509,7 @@ class StockAnalysisPipeline:
                     self.process_single_stock,
                     code,
                     skip_analysis=dry_run,
+                    ai_dry_run=ai_dry_run,
                     single_stock_notify=single_stock_notify and send_notification,
                     report_type=report_type  # Issue #119: 传递报告类型
                 ): code

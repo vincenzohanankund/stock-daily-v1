@@ -384,9 +384,11 @@ class BochaSearchProvider(BaseSearchProvider):
             }
             
             # 请求参数（严格按照API文档）
+            # 注意：Bocha freshness 只支持 oneDay/oneWeek/oneMonth/noLimit
+            # 为获取近2个月数据，使用 noLimit 并在 query 中加时间限制
             payload = {
                 "query": query,
-                "freshness": "oneMonth",  # 搜索近一个月，适合捕获财报、公告等信息
+                "freshness": "noLimit",  # 不限制时间，通过 query 中的时间关键词过滤
                 "summary": True,  # 启用AI摘要
                 "count": min(max_results, 50)  # 最大50条
             }
@@ -528,6 +530,40 @@ class BochaSearchProvider(BaseSearchProvider):
             return domain or '未知来源'
         except:
             return '未知来源'
+
+
+def detect_stock_market(stock_code: str) -> str:
+    """
+    根据股票代码判断所属市场
+    
+    Args:
+        stock_code: 股票代码
+        
+    Returns:
+        'US' - 美股
+        'HK' - 港股
+        'CN' - A股
+    """
+    code = stock_code.strip().upper()
+    
+    # 美股：纯字母或字母+数字（如 AAPL, TSLA, META, BRK.A）
+    if code.replace('.', '').replace('-', '').isalpha():
+        return 'US'
+    
+    # 包含字母的混合代码也视为美股（如 BRK.B）
+    if any(c.isalpha() for c in code):
+        return 'US'
+    
+    # 港股：5位数字（如 00700, 09988）
+    if code.isdigit() and len(code) == 5:
+        return 'HK'
+    
+    # A股：6位数字（如 600519, 300750, 000001）
+    if code.isdigit() and len(code) == 6:
+        return 'CN'
+    
+    # 默认视为A股
+    return 'CN'
 
 
 class SearchService:
@@ -687,15 +723,18 @@ class SearchService:
         self,
         stock_code: str,
         stock_name: str,
-        max_searches: int = 3
+        max_searches: int = 4
     ) -> Dict[str, SearchResponse]:
         """
         多维度情报搜索（同时使用多个引擎、多个维度）
         
         搜索维度：
-        1. 最新消息 - 近期新闻动态
-        2. 风险排查 - 减持、处罚、利空
-        3. 业绩预期 - 年报预告、业绩快报
+        1. 最新消息 - 近期新闻动态（中文）
+        2. 风险排查 - 减持、处罚、利空（中文）
+        3. 业绩预期 - 年报预告、业绩快报（中文）
+        4. 英文情报 - 仅美股，搜索英文媒体（Reuters, Bloomberg 等）
+        
+        时间范围：近一周
         
         Args:
             stock_code: 股票代码
@@ -708,26 +747,63 @@ class SearchService:
         results = {}
         search_count = 0
         
-        # 定义搜索维度
-        search_dimensions = [
-            {
-                'name': 'latest_news',
-                'query': f"{stock_name} {stock_code} 最新 新闻 2026年1月",
-                'desc': '最新消息'
-            },
-            {
-                'name': 'risk_check', 
-                'query': f"{stock_name} 减持 处罚 利空 风险",
-                'desc': '风险排查'
-            },
-            {
-                'name': 'earnings',
-                'query': f"{stock_name} 年报预告 业绩预告 业绩快报 2025年报",
-                'desc': '业绩预期'
-            },
-        ]
+        # 判断股票市场类型
+        market = detect_stock_market(stock_code)
+        is_us_stock = (market == 'US')
         
-        logger.info(f"开始多维度情报搜索: {stock_name}({stock_code})")
+        # 时间范围关键词（近2个月）
+        # 时间范围关键词（近一周）
+        time_range_cn = "近一周 OR 最近 OR 今日"
+        time_range_en = "this week OR recent OR today"
+        
+        # 定义搜索维度（中文）
+        search_dimensions = []
+        
+        if is_us_stock:
+            # 美股：中英文混合搜索
+            search_dimensions = [
+                {
+                    'name': 'latest_news_en',
+                    'query': f"{stock_code} stock news {time_range_en}",
+                    'desc': '英文最新消息'
+                },
+                {
+                    'name': 'risk_check_en',
+                    'query': f"{stock_code} SEC filing insider selling lawsuit investigation 2025 2026",
+                    'desc': '英文风险排查'
+                },
+                {
+                    'name': 'earnings_en',
+                    'query': f"{stock_code} earnings report Q4 2025 guidance forecast",
+                    'desc': '英文业绩预期'
+                },
+                {
+                    'name': 'latest_news_cn',
+                    'query': f"{stock_name} {stock_code} 美股 最新消息 {time_range_cn}",
+                    'desc': '中文最新消息'
+                },
+            ]
+        else:
+            # A股/港股：中文搜索
+            search_dimensions = [
+                {
+                    'name': 'latest_news',
+                    'query': f"{stock_name} {stock_code} 最新消息 {time_range_cn}",
+                    'desc': '最新消息'
+                },
+                {
+                    'name': 'risk_check', 
+                    'query': f"{stock_name} 减持 处罚 利空 风险 2025 2026",
+                    'desc': '风险排查'
+                },
+                {
+                    'name': 'earnings',
+                    'query': f"{stock_name} 年报预告 业绩预告 业绩快报 2025年报 2026",
+                    'desc': '业绩预期'
+                },
+            ]
+        
+        logger.info(f"开始多维度情报搜索: {stock_name}({stock_code}) [市场: {market}]")
         
         # 轮流使用不同的搜索引擎
         provider_index = 0
@@ -760,52 +836,109 @@ class SearchService:
         
         return results
     
-    def format_intel_report(self, intel_results: Dict[str, SearchResponse], stock_name: str) -> str:
+    def format_intel_report(self, intel_results: Dict[str, SearchResponse], stock_name: str, stock_code: str = "") -> str:
         """
         格式化情报搜索结果为报告
         
         Args:
             intel_results: 多维度搜索结果
             stock_name: 股票名称
+            stock_code: 股票代码（用于判断市场类型）
             
         Returns:
             格式化的情报报告文本
         """
+        # 判断是否为美股
+        market = detect_stock_market(stock_code) if stock_code else 'CN'
+        is_us_stock = (market == 'US')
+        
         lines = [f"【{stock_name} 情报搜索结果】"]
+        if is_us_stock:
+            lines.append("(美股 - 包含英文媒体情报)")
         
-        # 最新消息
-        if 'latest_news' in intel_results:
-            resp = intel_results['latest_news']
-            lines.append(f"\n📰 最新消息 (来源: {resp.provider}):")
-            if resp.success and resp.results:
-                for i, r in enumerate(resp.results[:3], 1):
-                    date_str = f" [{r.published_date}]" if r.published_date else ""
-                    lines.append(f"  {i}. {r.title}{date_str}")
-                    lines.append(f"     {r.snippet[:100]}...")
-            else:
-                lines.append("  未找到相关消息")
+        # === 英文情报（仅美股）===
+        if is_us_stock:
+            # 英文最新消息
+            if 'latest_news_en' in intel_results:
+                resp = intel_results['latest_news_en']
+                lines.append(f"\n📰 Latest News / 英文最新消息 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        date_str = f" [{r.published_date}]" if r.published_date else ""
+                        lines.append(f"  {i}. {r.title}{date_str}")
+                        lines.append(f"     {r.snippet[:150]}...")
+                else:
+                    lines.append("  No recent news found")
+            
+            # 英文风险排查
+            if 'risk_check_en' in intel_results:
+                resp = intel_results['risk_check_en']
+                lines.append(f"\n⚠️ Risk Alerts / 英文风险排查 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        lines.append(f"  {i}. {r.title}")
+                        lines.append(f"     {r.snippet[:150]}...")
+                else:
+                    lines.append("  No risk signals found")
+            
+            # 英文业绩预期
+            if 'earnings_en' in intel_results:
+                resp = intel_results['earnings_en']
+                lines.append(f"\n📊 Earnings / 英文业绩预期 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        lines.append(f"  {i}. {r.title}")
+                        lines.append(f"     {r.snippet[:150]}...")
+                else:
+                    lines.append("  No earnings info found")
+            
+            # 中文补充消息
+            if 'latest_news_cn' in intel_results:
+                resp = intel_results['latest_news_cn']
+                lines.append(f"\n📰 中文媒体补充 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        date_str = f" [{r.published_date}]" if r.published_date else ""
+                        lines.append(f"  {i}. {r.title}{date_str}")
+                        lines.append(f"     {r.snippet[:100]}...")
+                else:
+                    lines.append("  未找到相关消息")
         
-        # 风险排查
-        if 'risk_check' in intel_results:
-            resp = intel_results['risk_check']
-            lines.append(f"\n⚠️ 风险排查 (来源: {resp.provider}):")
-            if resp.success and resp.results:
-                for i, r in enumerate(resp.results[:3], 1):
-                    lines.append(f"  {i}. {r.title}")
-                    lines.append(f"     {r.snippet[:100]}...")
-            else:
-                lines.append("  未发现明显风险信号")
-        
-        # 业绩预期
-        if 'earnings' in intel_results:
-            resp = intel_results['earnings']
-            lines.append(f"\n📊 业绩预期 (来源: {resp.provider}):")
-            if resp.success and resp.results:
-                for i, r in enumerate(resp.results[:3], 1):
-                    lines.append(f"  {i}. {r.title}")
-                    lines.append(f"     {r.snippet[:100]}...")
-            else:
-                lines.append("  未找到业绩相关信息")
+        else:
+            # === 中文情报（A股/港股）===
+            # 最新消息
+            if 'latest_news' in intel_results:
+                resp = intel_results['latest_news']
+                lines.append(f"\n📰 最新消息 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        date_str = f" [{r.published_date}]" if r.published_date else ""
+                        lines.append(f"  {i}. {r.title}{date_str}")
+                        lines.append(f"     {r.snippet[:100]}...")
+                else:
+                    lines.append("  未找到相关消息")
+            
+            # 风险排查
+            if 'risk_check' in intel_results:
+                resp = intel_results['risk_check']
+                lines.append(f"\n⚠️ 风险排查 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        lines.append(f"  {i}. {r.title}")
+                        lines.append(f"     {r.snippet[:100]}...")
+                else:
+                    lines.append("  未发现明显风险信号")
+            
+            # 业绩预期
+            if 'earnings' in intel_results:
+                resp = intel_results['earnings']
+                lines.append(f"\n📊 业绩预期 (来源: {resp.provider}):")
+                if resp.success and resp.results:
+                    for i, r in enumerate(resp.results[:3], 1):
+                        lines.append(f"  {i}. {r.title}")
+                        lines.append(f"     {r.snippet[:100]}...")
+                else:
+                    lines.append("  未找到业绩相关信息")
         
         return "\n".join(lines)
     
