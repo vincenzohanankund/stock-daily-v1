@@ -36,10 +36,14 @@ class ConceptBoardSelector:
         self.top_boards = top_boards
         self.stocks_per_board = stocks_per_board
         self.fetcher = AkshareFetcher(sleep_min=sleep_min, sleep_max=sleep_max)
+        self.last_boards: List[Dict[str, Optional[str]]] = []
+        self.last_board_summary: Dict[str, List[str]] = {}
 
     def select(self) -> List[str]:
         """选出概念板块股票列表"""
         boards = self._get_top_concept_boards(self.top_boards)
+        self.last_boards = boards
+        self.last_board_summary = {}
         if not boards:
             logger.warning("[板块选股] 未获取到概念板块排行，返回空列表")
             return []
@@ -65,6 +69,7 @@ class ConceptBoardSelector:
                 f"{name}({len(codes)}只)" for name, codes in board_summary.items()
             )
         )
+        self.last_board_summary = board_summary
         return selected_codes
 
     def _get_top_concept_boards(self, top_n: int) -> List[Dict[str, Optional[str]]]:
@@ -101,7 +106,15 @@ class ConceptBoardSelector:
                 code_val = str(row.get(code_col, "")).strip()
                 if code_val:
                     code = code_val
-            boards.append({"name": name, "code": code})
+            change_pct = None
+            if change_col:
+                change_pct = row.get(change_col)
+                if pd.notna(change_pct):
+                    try:
+                        change_pct = float(change_pct)
+                    except Exception:
+                        change_pct = None
+            boards.append({"name": name, "code": code, "change_pct": change_pct})
 
         logger.info(
             f"[板块选股] 概念板块 Top{len(boards)}: {[b['name'] for b in boards]}"

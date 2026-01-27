@@ -157,9 +157,13 @@ class StockAnalysisPipeline:
         self.akshare_fetcher = AkshareFetcher()  # 用于获取增强数据（量比、筹码等）
         self.efinance_fetcher = EfinanceFetcher()  # 用于股票名称等基础信息兜底
         self.trend_analyzer = StockTrendAnalyzer()  # 趋势分析器
+        self.market_analyzer = MarketAnalyzer()  # 用于获取大盘指数快照
         self.analyzer = GeminiAnalyzer()
         self.notifier = NotificationService()
         self.stock_name_cache: Dict[str, str] = {}
+
+        self.market_snapshot: List = []
+        self.market_context: Dict[str, Any] = {}
 
         # 初始化搜索服务
         self.search_service = SearchService(
@@ -223,6 +227,56 @@ class StockAnalysisPipeline:
             error_msg = f"获取/保存数据失败: {str(e)}"
             logger.error(f"[{code}] {error_msg}")
             return False, error_msg
+
+    def _refresh_market_snapshot(self) -> None:
+        """
+        获取大盘指数快照（轻量版）
+        """
+        try:
+            self.market_snapshot = self.market_analyzer.get_index_snapshot()
+            self.market_context = self._build_market_context(self.market_snapshot)
+            if self.market_context:
+                logger.info(
+                    "[大盘] 指数快照: %s %.2f%%",
+                    self.market_context.get("index_name", "未知"),
+                    self.market_context.get("index_change_pct", 0.0),
+                )
+        except Exception as e:
+            logger.warning(f"[大盘] 获取指数快照失败: {e}")
+            self.market_snapshot = []
+            self.market_context = {}
+
+    def _build_market_context(self, indices: List[Any]) -> Dict[str, Any]:
+        """
+        构建市场状态简表
+        """
+        if not indices:
+            return {}
+
+        preferred_codes = ["sh000300", "sh000001", "sz399001"]
+        selected = None
+        for code in preferred_codes:
+            selected = next((idx for idx in indices if idx.code == code), None)
+            if selected:
+                break
+
+        if not selected:
+            selected = indices[0]
+
+        change_pct = float(getattr(selected, "change_pct", 0.0) or 0.0)
+        if change_pct >= 1.0:
+            market_status = "吸筹"
+        elif change_pct <= -1.0:
+            market_status = "派发"
+        else:
+            market_status = "静默"
+
+        return {
+            "index_code": getattr(selected, "code", ""),
+            "index_name": getattr(selected, "name", ""),
+            "index_change_pct": change_pct,
+            "market_status": market_status,
+        }
 
     def _update_stock_name_cache(self, code: str, df: Any) -> None:
         """
@@ -345,7 +399,13 @@ class StockAnalysisPipeline:
                     raw_data = context["raw_data"]
                     if isinstance(raw_data, list) and len(raw_data) > 0:
                         df = pd.DataFrame(raw_data)
-                        trend_result = self.trend_analyzer.analyze(df, code)
+                        trend_result = self.trend_analyzer.analyze(
+                            df,
+                            code,
+                            market_change_pct=self.market_context.get(
+                                "index_change_pct"
+                            ),
+                        )
                         logger.info(
                             f"[{code}] 趋势分析: {trend_result.trend_status.value}, "
                             f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}"
@@ -471,11 +531,25 @@ class StockAnalysisPipeline:
                 "bias_ma10": trend_result.bias_ma10,
                 "volume_status": trend_result.volume_status.value,
                 "volume_trend": trend_result.volume_trend,
+                "structure_high": trend_result.structure_high,
+                "structure_low": trend_result.structure_low,
+                "structure_signal": trend_result.structure_signal,
+                "structure_distance_pct": trend_result.structure_distance_pct,
+                "effort_ratio": trend_result.effort_ratio,
+                "result_body_pct": trend_result.result_body_pct,
+                "effort_result_flag": trend_result.effort_result_flag,
+                "market_change_pct": trend_result.market_change_pct,
+                "stock_change_pct": trend_result.stock_change_pct,
+                "relative_strength": trend_result.relative_strength,
+                "rs_status": trend_result.rs_status,
                 "buy_signal": trend_result.buy_signal.value,
                 "signal_score": trend_result.signal_score,
                 "signal_reasons": trend_result.signal_reasons,
                 "risk_factors": trend_result.risk_factors,
             }
+
+        if self.market_context:
+            enhanced["market"] = self.market_context
 
         return enhanced
 
@@ -602,6 +676,9 @@ class StockAnalysisPipeline:
         logger.info(
             f"并发数: {self.max_workers}, 模式: {'仅获取数据' if dry_run else '完整分析'}"
         )
+
+        # 获取大盘快照（用于相对强弱判断）
+        self._refresh_market_snapshot()
 
         # 单股推送模式（#55）：从配置读取
         single_stock_notify = getattr(self.config, "single_stock_notify", False)
@@ -853,6 +930,7 @@ def resolve_stock_codes(
     config: Config,
     args: argparse.Namespace,
     stock_codes: Optional[List[str]] = None,
+    notifier: Optional[NotificationService] = None,
 ) -> List[str]:
     """解析最终股票列表"""
     if stock_codes:
@@ -873,6 +951,39 @@ def resolve_stock_codes(
             sleep_max=config.akshare_sleep_max,
         )
         concept_codes = selector.select()
+        if selector.last_boards:
+            board_lines = [
+                "# 📌 概念板块快照",
+                f"> Top{len(selector.last_boards)} 板块 | 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                "| 板块 | 涨跌幅 | 成分股数 |",
+                "|------|--------|----------|",
+            ]
+            for board in selector.last_boards:
+                name = board.get("name") or "未知"
+                change_pct = board.get("change_pct")
+                change_text = (
+                    f"{change_pct:.2f}%"
+                    if isinstance(change_pct, (int, float))
+                    else "N/A"
+                )
+                codes = selector.last_board_summary.get(name, [])
+                board_lines.append(f"| {name} | {change_text} | {len(codes)} |")
+
+            if not concept_codes:
+                board_lines.extend(
+                    [
+                        "",
+                        "*成分股获取失败，已回退到 STOCK_LIST*",
+                    ]
+                )
+
+            board_report = "\n".join(board_lines)
+            if notifier and notifier.is_available():
+                notifier.send(board_report)
+            else:
+                logger.info("[通知] 未配置通知渠道，跳过板块快照推送")
+
         if concept_codes:
             logger.info(f"[选股] 概念板块选出 {len(concept_codes)} 只股票")
             return concept_codes
@@ -893,15 +1004,20 @@ def run_full_analysis(
     这是定时任务调用的主函数
     """
     try:
+        # 创建调度器
+        pipeline = StockAnalysisPipeline(config=config, max_workers=args.workers)
+
         # 解析股票列表（支持概念板块自动选股）
-        resolved_stock_codes = resolve_stock_codes(config, args, stock_codes)
+        resolved_stock_codes = resolve_stock_codes(
+            config,
+            args,
+            stock_codes,
+            notifier=pipeline.notifier,
+        )
 
         # 命令行参数 --single-notify 覆盖配置（#55）
         if getattr(args, "single_notify", False):
             config.single_stock_notify = True
-
-        # 创建调度器
-        pipeline = StockAnalysisPipeline(config=config, max_workers=args.workers)
 
         # 1. 运行个股分析
         results = pipeline.run(

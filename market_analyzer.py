@@ -139,6 +139,15 @@ class MarketAnalyzer:
 
         return overview
 
+    def get_index_snapshot(self) -> List[MarketIndex]:
+        """
+        获取主要指数快照（轻量版）
+
+        Returns:
+            主要指数列表
+        """
+        return self._get_main_indices()
+
     def _call_akshare_with_retry(self, fn, name: str, attempts: int = 2):
         last_error: Optional[Exception] = None
         for attempt in range(1, attempts + 1):
