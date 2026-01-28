@@ -273,7 +273,7 @@ class DataFetcherManager:
         from .baostock_fetcher import BaostockFetcher
         from .yfinance_fetcher import YfinanceFetcher
         
-self._fetchers = [
+    self._fetchers = [
             TushareFetcher(),    # 第一顺位：使用你的付费 Tushare，最稳定
             YfinanceFetcher(),   # 第二顺位：雅虎财经，海外服务器访问非常顺畅
             # EfinanceFetcher(),  # 暂时禁用：GitHub IP 经常被封
