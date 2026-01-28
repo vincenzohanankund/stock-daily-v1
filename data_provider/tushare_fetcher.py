@@ -30,6 +30,7 @@ from tenacity import (
 
 from .base import BaseFetcher, DataFetchError, RateLimitError, STANDARD_COLUMNS
 from src.config import get_config
+from .realtime_types import ChipDistribution, safe_float  # 导入ChipDistribution和安全转换函数
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,126 @@ class TushareFetcher(BaseFetcher):
             # 默认尝试深市
             logger.warning(f"无法确定股票 {code} 的市场，默认使用深市")
             return f"{code}.SZ"
-    
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
+    def get_chip_distribution(self, stock_code: str, trade_date: str = None, start_date: str = None, end_date: str = None) -> Optional[ChipDistribution]:
+        """
+        获取股票筹码分布数据（使用cyq_perf接口）
+        
+        Args:
+            stock_code: 股票代码，如 '600519'
+            trade_date: 指定交易日期（YYYY-MM-DD），优先级高于start_date和end_date
+            start_date: 开始日期（YYYY-MM-DD）
+            end_date: 结束日期（YYYY-MM-DD）
+            
+        Returns:
+            ChipDistribution 对象，包含筹码分布相关信息，获取失败返回 None
+        """
+        if self._api is None:
+            raise DataFetchError("Tushare API 未初始化，请检查 Token 配置")
+
+        # 速率限制检查
+        self._check_rate_limit()
+
+        # 转换代码格式
+        ts_code = self._convert_stock_code(stock_code)
+
+        # 准备参数
+        params = {'ts_code': ts_code}
+
+        if trade_date:
+            # 如果指定具体交易日，则使用该日期
+            params['trade_date'] = trade_date.replace('-', '')
+        else:
+            # 否则使用开始和结束日期范围
+            if start_date:
+                params['start_date'] = start_date.replace('-', '')
+            if end_date:
+                params['end_date'] = end_date.replace('-', '')
+
+        logger.debug(f"调用 Tushare cyq_perf({params})")
+
+        try:
+            # 调用 cyq_perf 接口获取筹码分布数据
+            df = self._api.cyq_perf(**params)
+
+            if df is None or df.empty:
+                logger.warning(f"未获取到 {stock_code} 在指定日期的筹码分布数据")
+                return None
+
+            # 取最新一天的数据
+            latest = df.iloc[-1]
+            
+            # 使用计算函数从Tushare数据转换为AKShare格式
+            calculated_data = self._calculate_akshare_fields_from_tushare(latest)
+            
+            # 创建ChipDistribution对象
+            chip = ChipDistribution(
+                code=stock_code,
+                date=latest.get('trade_date', ''),
+                source="tushare",
+                profit_ratio=calculated_data['profit_ratio'],
+                avg_cost=calculated_data['avg_cost'],
+                cost_90_low=calculated_data['cost_90_low'],
+                cost_90_high=calculated_data['cost_90_high'],
+                concentration_90=calculated_data['concentration_90'],
+                cost_70_low=calculated_data['cost_70_low'],
+                cost_70_high=calculated_data['cost_70_high'],
+                concentration_70=calculated_data['concentration_70'],
+            )
+            
+            logger.info(f"[筹码分布-Tushare] {stock_code} 日期={chip.date}: "
+                       f"获利比例={chip.profit_ratio:.1%}, 平均成本={chip.avg_cost}, "
+                       f"90%集中度={chip.concentration_90:.2f}%, 70%集中度={chip.concentration_70:.2f}%")
+            return chip
+
+        except Exception as e:
+            error_msg = str(e).lower()
+
+            # 检测配额超限
+            if any(keyword in error_msg for keyword in ['quota', '配额', 'limit', '权限']):
+                logger.warning(f"Tushare 配额可能超限: {e}")
+                raise RateLimitError(f"Tushare 配额超限: {e}") from e
+
+            logger.error(f"Tushare 获取筹码分布数据失败: {e}")
+            return None
+
+    def _calculate_akshare_fields_from_tushare(self, row):
+        """
+        根据Tushare的cyq_perf数据，计算AKShare的区间和集中度
+        """
+        # 获取Tushare提供的分位成本数据
+        cost_5 = safe_float(row.get('cost_5pct'))
+        cost_15 = safe_float(row.get('cost_15pct'))
+        cost_85 = safe_float(row.get('cost_85pct'))
+        cost_95 = safe_float(row.get('cost_95pct'))
+        
+        # 计算90%成本区间和集中度 (5% ~ 95%)
+        high_90 = cost_95
+        low_90 = cost_5
+        concentration_90 = (high_90 - low_90) / (high_90 + low_90) * 100 if (high_90 + low_90) > 0 else 0
+        
+        # 计算70%成本区间和集中度 (15% ~ 85%)
+        high_70 = cost_85
+        low_70 = cost_15
+        concentration_70 = (high_70 - low_70) / (high_70 + low_70) * 100 if (high_70 + low_70) > 0 else 0
+        
+        return {
+            'profit_ratio': safe_float(row.get('winner_rate')) / 100,  # 转换为0-1之间的比例
+            'avg_cost': safe_float(row.get('weight_avg')),  # 加权平均成本
+            'cost_90_low': low_90,
+            'cost_90_high': high_90,
+            'concentration_90': round(concentration_90, 2),
+            'cost_70_low': low_70,
+            'cost_70_high': high_70,
+            'concentration_70': round(concentration_70, 2),
+        }
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=30),
@@ -307,7 +427,7 @@ if __name__ == "__main__":
     fetcher = TushareFetcher()
     
     try:
-        df = fetcher.get_daily_data('600519')  # 茅台
+        df = fetcher.get_daily_data('601179')  # 茅台
         print(f"获取成功，共 {len(df)} 条数据")
         print(df.tail())
     except Exception as e:

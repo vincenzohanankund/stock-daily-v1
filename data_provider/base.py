@@ -287,9 +287,9 @@ class DataFetcherManager:
 
         # 初始化数据源列表
         self._fetchers = [
-            efinance,
-            akshare,
             tushare,
+            akshare,
+            efinance,
             baostock,
             yfinance,
         ]
@@ -535,7 +535,7 @@ class DataFetcherManager:
         策略：
         1. 检查配置开关
         2. 检查熔断器状态
-        3. 调用 AkshareFetcher.get_chip_distribution()
+        3. 调用 AkshareFetcher.get_chip_distribution() 或 TushareFetcher.get_chip_distribution()
         4. 失败则返回 None（降级兜底）
         
         Args:
@@ -561,9 +561,9 @@ class DataFetcherManager:
             return None
         
         try:
-            # 调用 AkshareFetcher 获取筹码分布
+            # 调用 AkshareFetcher 或 TushareFetcher 获取筹码分布
             for fetcher in self._fetchers:
-                if fetcher.name == "AkshareFetcher":
+                if fetcher.name == "AkshareFetcher" | fetcher.name == "TushareFetcher":
                     if hasattr(fetcher, 'get_chip_distribution'):
                         chip = fetcher.get_chip_distribution(stock_code)
                         if chip is not None:
