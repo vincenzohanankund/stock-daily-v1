@@ -198,13 +198,22 @@ class StockScreener:
         logger.info(f"选股日期: {screen_date}")
         logger.info("=" * 60)
 
+        # 检查是否是未来日期
+        if target_date and target_date > date.today():
+            logger.error(f"不能指定未来日期: {target_date}")
+            raise ValueError(f"Target date cannot be in the future: {target_date}")
+
+        # 检查是否是周末（简单判断）
+        if target_date and target_date.weekday() >= 5:
+            logger.warning(f"{target_date} 是周末，可能没有交易数据")
+
         # 检查是否已选股
         if not force_refresh and self._has_today_screening(screen_date):
             logger.info(f"{screen_date} 已执行选股，使用缓存结果")
             return self._load_screening_results_by_date(screen_date)
 
         # Step 1: 获取全市场股票列表
-        all_stocks = self._get_all_stocks()
+        all_stocks = self._get_all_stocks(target_date=target_date)
         logger.info(f"全市场股票数: {len(all_stocks)}")
 
         if not all_stocks:
@@ -255,15 +264,23 @@ class StockScreener:
 
         return final_results
 
-    def _get_all_stocks(self) -> List[Dict[str, Any]]:
+    def _get_all_stocks(self, target_date: Optional[date] = None) -> List[Dict[str, Any]]:
         """
         获取全市场股票列表（复用实时行情缓存）
 
         使用缓存管理器检查是否已有全市场数据，避免重复API调用
 
+        Args:
+            target_date: 目标日期（用于历史数据检查）
+
         Returns:
             股票列表，每个元素包含 {code, name, price, ...}
         """
+        # 如果是历史日期，记录警告
+        if target_date and target_date < date.today():
+            logger.info(f"使用历史日期 {target_date} 进行选股")
+            logger.warning("历史日期选股依赖于数据库中已有的历史数据，如数据缺失可能影响选股结果")
+
         try:
             import akshare as ak
             from data_provider.data_cache_manager import get_cache_manager
