@@ -181,12 +181,8 @@ USER_AGENTS = [
 ]
 
 
-# 缓存实时行情数据（避免重复请求）
-_realtime_cache: Dict[str, Any] = {
-    'data': None,
-    'timestamp': 0,
-    'ttl': 60  # 60秒缓存有效期
-}
+# 旧的全局缓存已由 DataCacheManager 替代
+# 保留此注释用于向后兼容检查
 
 
 class AkshareFetcher(BaseFetcher):
@@ -360,50 +356,52 @@ class AkshareFetcher(BaseFetcher):
     
     def get_realtime_quote(self, stock_code: str) -> Optional[RealtimeQuote]:
         """
-        获取实时行情数据
-        
+        获取实时行情数据（带缓存优化）
+
         数据来源：ak.stock_zh_a_spot_em()
         包含：量比、换手率、市盈率、市净率、总市值、流通市值等
-        
+
+        缓存策略：60秒TTL，线程安全
+
         Args:
             stock_code: 股票代码
-            
+
         Returns:
             RealtimeQuote 对象，获取失败返回 None
         """
         import akshare as ak
-        
+        from .data_cache_manager import get_cache_manager
+
+        cache_mgr = get_cache_manager()
+
         try:
-            # 检查缓存
-            current_time = time.time()
-            if (_realtime_cache['data'] is not None and 
-                current_time - _realtime_cache['timestamp'] < _realtime_cache['ttl']):
-                df = _realtime_cache['data']
-                logger.debug(f"[缓存命中] 使用缓存的实时行情数据")
-            else:
-                # 防封禁策略
+            # 检查缓存（全市场行情数据）
+            ALL_MARKET_KEY = "__all_market_spot__"
+            df = cache_mgr.get('market', ALL_MARKET_KEY)
+
+            if df is None:
+                # 缓存未命中，调用API获取全市场行情
                 self._set_random_user_agent()
                 self._enforce_rate_limit()
-                
+
                 logger.info(f"[API调用] ak.stock_zh_a_spot_em() 获取A股实时行情...")
                 import time as _time
                 api_start = _time.time()
-                
+
                 df = ak.stock_zh_a_spot_em()
-                
+
                 api_elapsed = _time.time() - api_start
                 logger.info(f"[API返回] ak.stock_zh_a_spot_em 成功: 返回 {len(df)} 只股票, 耗时 {api_elapsed:.2f}s")
-                
-                # 更新缓存
-                _realtime_cache['data'] = df
-                _realtime_cache['timestamp'] = current_time
-            
+
+                # 存入缓存
+                cache_mgr.set('market', ALL_MARKET_KEY, df)
+
             # 查找指定股票
             row = df[df['代码'] == stock_code]
             if row.empty:
                 logger.warning(f"[API返回] 未找到股票 {stock_code} 的实时行情")
                 return None
-            
+
             row = row.iloc[0]
             
             # 安全获取字段值
@@ -444,28 +442,38 @@ class AkshareFetcher(BaseFetcher):
     
     def get_chip_distribution(self, stock_code: str) -> Optional[ChipDistribution]:
         """
-        获取筹码分布数据
-        
+        获取筹码分布数据（带缓存优化）
+
         数据来源：ak.stock_cyq_em()
         包含：获利比例、平均成本、筹码集中度
-        
+
+        缓存策略：300秒TTL（5分钟），线程安全
+
         Args:
             stock_code: 股票代码
-            
+
         Returns:
             ChipDistribution 对象（最新一天的数据），获取失败返回 None
         """
         import akshare as ak
-        
+        from .data_cache_manager import get_cache_manager
+
+        cache_mgr = get_cache_manager()
+
         try:
-            # 防封禁策略
+            # 检查缓存
+            cached_chip = cache_mgr.get('chip', stock_code)
+            if cached_chip is not None:
+                return cached_chip
+
+            # 缓存未命中，调用API获取数据
             self._set_random_user_agent()
             self._enforce_rate_limit()
-            
+
             logger.info(f"[API调用] ak.stock_cyq_em(symbol={stock_code}) 获取筹码分布...")
             import time as _time
             api_start = _time.time()
-            
+
             df = ak.stock_cyq_em(symbol=stock_code)
             
             api_elapsed = _time.time() - api_start
@@ -500,7 +508,10 @@ class AkshareFetcher(BaseFetcher):
                 cost_70_high=safe_float(latest.get('70成本-高')),
                 concentration_70=safe_float(latest.get('70集中度')),
             )
-            
+
+            # 存入缓存
+            cache_mgr.set('chip', stock_code, chip)
+
             logger.info(f"[筹码分布] {stock_code} 日期={chip.date}: 获利比例={chip.profit_ratio:.1%}, "
                        f"平均成本={chip.avg_cost}, 90%集中度={chip.concentration_90:.2%}, "
                        f"70%集中度={chip.concentration_70:.2%}")

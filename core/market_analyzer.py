@@ -19,7 +19,7 @@ import akshare as ak
 import pandas as pd
 
 from config import get_config
-from search_service import SearchService
+from services.search_service import SearchService
 
 logger = logging.getLogger(__name__)
 
