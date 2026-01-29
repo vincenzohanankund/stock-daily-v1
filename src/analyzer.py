@@ -1137,20 +1137,29 @@ class GeminiAnalyzer:
             return self._parse_text_response(response_text, code, name)
     
     def _fix_json_string(self, json_str: str) -> str:
-        """修复常见的 JSON 格式问题"""
+        """修复常见的 JSON 格式错误"""
         import re
         
-        # 移除注释
+        # 1. 替换中文符号
+        json_str = json_str.replace('：', ':').replace('，', ',').replace('“', '"').replace('”', '"')
+        
+        # 2. 移除注释 (// 或 /* */)
         json_str = re.sub(r'//.*?\n', '\n', json_str)
         json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
         
-        # 修复尾随逗号
+        # 3. 修复尾随逗号 (例如 "key": "value", })
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
         
-        # 确保布尔值是小写
-        json_str = json_str.replace('True', 'true').replace('False', 'false')
+        # 4. 修复 Python 风格的布尔值和 None
+        json_str = json_str.replace('True', 'true').replace('False', 'false').replace('None', 'null')
         
+        # 5. 尝试补全缺失的结尾大括号 (LLM 经常写到一半断掉)
+        open_braces = json_str.count('{')
+        close_braces = json_str.count('}')
+        if open_braces > close_braces:
+            json_str += '}' * (open_braces - close_braces)
+            
         return json_str
     
     def _parse_text_response(
