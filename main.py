@@ -799,7 +799,8 @@ def run_market_review(notifier: NotificationService, analyzer=None, search_servi
 def run_stock_screening(
     config: Config,
     args: argparse.Namespace,
-    notifier: NotificationService
+    notifier: NotificationService,
+    target_date: Optional[date] = None  # 新增参数
 ) -> Optional[List]:
     """
     执行全市场选股
@@ -808,6 +809,7 @@ def run_stock_screening(
         config: 配置对象
         args: 命令行参数
         notifier: 通知服务
+        target_date: 目标选股日期（None表示今天）
 
     Returns:
         选股结果列表
@@ -836,7 +838,8 @@ def run_stock_screening(
         # 执行选股
         results = screener.screen_market(
             mode=mode,
-            force_refresh=args.force_refresh
+            force_refresh=args.force_refresh,
+            target_date=target_date  # 新增参数
         )
 
         if not results:
@@ -1075,7 +1078,17 @@ def main() -> int:
     if args.stocks:
         stock_codes = [code.strip() for code in args.stocks.split(',') if code.strip()]
         logger.info(f"使用命令行指定的股票列表: {stock_codes}")
-    
+
+    # 解析目标日期
+    target_date = None
+    if args.date:
+        try:
+            target_date = parse_target_date(args.date)
+            logger.info(f"使用指定日期进行选股: {target_date}")
+        except ValueError as e:
+            logger.error(f"日期参数错误: {e}")
+            return 1
+
     try:
         # 模式1: 仅大盘复盘
         if args.market_review:
@@ -1111,7 +1124,7 @@ def main() -> int:
                     serpapi_keys=config.serpapi_keys
                 )
 
-            run_stock_screening(config, args, notifier)
+            run_stock_screening(config, args, notifier, target_date)
             return 0
 
         # 模式2.5: 策略选股（StockTradebyZ 战法）
