@@ -17,6 +17,7 @@
 
 import json
 import logging
+import os
 import random
 import time
 from dataclasses import dataclass, field
@@ -797,7 +798,6 @@ class StockScreener:
             选股结果列表
         """
         try:
-            import json
             results = []
 
             with self.db.get_session() as session:
@@ -832,10 +832,6 @@ class StockScreener:
         except Exception as e:
             logger.error(f"加载 {target_date} 选股结果失败: {e}")
             return []
-
-
-# 导入 os 模块
-import os
 
 
 # ==================== 便捷函数 ====================
