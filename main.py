@@ -850,7 +850,9 @@ def run_stock_screening(
 
         # 发送选股报告
         logger.info("生成选股报告...")
-        notifier.send_screening_report(results, save_to_file=True)
+        # 将 target_date 转换为字符串格式
+        report_date_str = target_date.strftime('%Y-%m-%d') if target_date else None
+        notifier.send_screening_report(results, save_to_file=True, report_date=report_date_str)
 
         # 自动分析（如果启用）
         if args.auto_analyze:
