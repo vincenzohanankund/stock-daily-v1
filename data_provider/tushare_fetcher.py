@@ -223,6 +223,15 @@ class TushareFetcher(BaseFetcher):
         Returns:
             ChipDistribution 对象，包含筹码分布相关信息，获取失败返回 None
         """
+        from .realtime_types import get_chip_circuit_breaker
+
+        # 检查熔断器状态
+        circuit_breaker = get_chip_circuit_breaker()
+        source_key = f"{self.name}_chip"
+        if not circuit_breaker.is_available(source_key):
+            logger.warning(f"[熔断] {self.name} 的筹码分布接口处于熔断状态，跳过 {stock_code}")
+            return None
+
         if self._api is None:
             raise DataFetchError("Tushare API 未初始化，请检查 Token 配置")
 
@@ -253,6 +262,7 @@ class TushareFetcher(BaseFetcher):
 
             if df is None or df.empty:
                 logger.warning(f"未获取到 {stock_code} 在指定日期的筹码分布数据")
+                circuit_breaker.record_failure(source_key, "No data returned")
                 return None
 
             # 取最新一天的数据
@@ -279,10 +289,13 @@ class TushareFetcher(BaseFetcher):
             logger.info(f"[筹码分布-Tushare] {stock_code} 日期={chip.date}: "
                        f"获利比例={chip.profit_ratio:.1%}, 平均成本={chip.avg_cost}, "
                        f"90%集中度={chip.concentration_90:.2f}%, 70%集中度={chip.concentration_70:.2f}%")
+                       
+            circuit_breaker.record_success(source_key)
             return chip
 
         except Exception as e:
             error_msg = str(e).lower()
+            circuit_breaker.record_failure(source_key, str(e))
 
             # 检测配额超限
             if any(keyword in error_msg for keyword in ['quota', '配额', 'limit', '权限']):

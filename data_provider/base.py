@@ -538,15 +538,15 @@ class DataFetcherManager:
         
         策略：
         1. 检查配置开关
-        2. 检查熔断器状态
-        3. 调用 AkshareFetcher.get_chip_distribution() 或 TushareFetcher.get_chip_distribution()
-        4. 失败则返回 None（降级兜底）
+        2. 遍历所有数据源，检查每个fetcher的熔断器状态
+        3. 如果熔断器未熔断且fetcher有get_chip_distribution功能，则尝试获取数据
+        4. 直到所有fetcher都尝试完毕或成功获取数据
         
         Args:
             stock_code: 股票代码
             
         Returns:
-            ChipDistribution 对象，失败则返回 None
+            ChipDistribution 对象，成功则返回数据，所有数据源都失败则返回 None
         """
         from .realtime_types import get_chip_circuit_breaker
         from src.config import get_config
@@ -557,30 +557,43 @@ class DataFetcherManager:
         if not config.enable_chip_distribution:
             logger.debug(f"[筹码分布] 功能已禁用，跳过 {stock_code}")
             return None
-        
-        # 检查熔断器状态
+
+        # 检查全局熔断器状态
         circuit_breaker = get_chip_circuit_breaker()
-        if not circuit_breaker.is_available("akshare_chip"):
-            logger.warning(f"[熔断] 筹码接口处于熔断状态，跳过 {stock_code}")
-            return None
         
-        try:
-            # 调用 AkshareFetcher 或 TushareFetcher 获取筹码分布
-            for fetcher in self._fetchers:
-                if fetcher.name == "AkshareFetcher" | fetcher.name == "TushareFetcher":
-                    if hasattr(fetcher, 'get_chip_distribution'):
-                        chip = fetcher.get_chip_distribution(stock_code)
-                        if chip is not None:
-                            circuit_breaker.record_success("akshare_chip")
-                            return chip
-                    break
+        # 遍历所有fetcher尝试获取筹码分布数据
+        for fetcher in self._fetchers:
+            fetcher_name = f"{fetcher.name}_chip"
             
-            return None
+            # 检查该fetcher的熔断器状态
+            if not circuit_breaker.is_available(fetcher_name):
+                logger.debug(f"[熔断] {fetcher.name} 的筹码分布接口处于熔断状态，跳过 {stock_code}")
+                continue
             
-        except Exception as e:
-            logger.error(f"[筹码分布] 获取 {stock_code} 失败: {e}")
-            circuit_breaker.record_failure("akshare_chip", str(e))
-            return None
+            # 检查fetcher是否有get_chip_distribution方法
+            if not hasattr(fetcher, 'get_chip_distribution'):
+                logger.debug(f"[筹码分布] {fetcher.name} 不支持筹码分布功能，跳过")
+                continue
+            
+            try:
+                # 尝试获取筹码分布数据
+                chip = fetcher.get_chip_distribution(stock_code)
+                
+                if chip is not None:
+                    logger.info(f"[筹码分布] 从 {fetcher.name} 成功获取 {stock_code} 的筹码分布数据")
+                    circuit_breaker.record_success(fetcher_name)
+                    return chip
+                else:
+                    logger.debug(f"[筹码分布] {fetcher.name} 未能获取到 {stock_code} 的筹码分布数据")
+                    circuit_breaker.record_failure(fetcher_name, "No data returned")
+                    
+            except Exception as e:
+                logger.warning(f"[筹码分布] {fetcher.name} 获取 {stock_code} 失败: {e}")
+                circuit_breaker.record_failure(fetcher_name, str(e))
+        
+        # 所有fetcher都尝试过但都失败了
+        logger.warning(f"[筹码分布] 所有数据源都无法获取 {stock_code} 的筹码分布数据")
+        return None
 
     def get_stock_name(self, stock_code: str) -> Optional[str]:
         """

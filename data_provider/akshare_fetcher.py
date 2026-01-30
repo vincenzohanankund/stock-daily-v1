@@ -989,6 +989,14 @@ class AkshareFetcher(BaseFetcher):
             ChipDistribution 对象（最新一天的数据），获取失败返回 None
         """
         import akshare as ak
+        from .realtime_types import get_chip_circuit_breaker
+
+        # 检查熔断器状态
+        circuit_breaker = get_chip_circuit_breaker()
+        source_key = f"{self.name}_chip"
+        if not circuit_breaker.is_available(source_key):
+            logger.warning(f"[熔断] {self.name} 的筹码分布接口处于熔断状态，跳过 {stock_code}")
+            return None
 
         # 美股没有筹码分布数据（Akshare 不支持）
         if _is_us_code(stock_code):
@@ -1015,6 +1023,7 @@ class AkshareFetcher(BaseFetcher):
             
             if df.empty:
                 logger.warning(f"[API返回] ak.stock_cyq_em 返回空数据, 耗时 {api_elapsed:.2f}s")
+                circuit_breaker.record_failure(source_key, "No data returned")
                 return None
             
             logger.info(f"[API返回] ak.stock_cyq_em 成功: 返回 {len(df)} 天数据, 耗时 {api_elapsed:.2f}s")
@@ -1027,6 +1036,7 @@ class AkshareFetcher(BaseFetcher):
             chip = ChipDistribution(
                 code=stock_code,
                 date=str(latest.get('日期', '')),
+                source="akshare",
                 profit_ratio=safe_float(latest.get('获利比例')),
                 avg_cost=safe_float(latest.get('平均成本')),
                 cost_90_low=safe_float(latest.get('90成本-低')),
@@ -1040,10 +1050,13 @@ class AkshareFetcher(BaseFetcher):
             logger.info(f"[筹码分布] {stock_code} 日期={chip.date}: 获利比例={chip.profit_ratio:.1%}, "
                        f"平均成本={chip.avg_cost}, 90%集中度={chip.concentration_90:.2%}, "
                        f"70%集中度={chip.concentration_70:.2%}")
+            
+            circuit_breaker.record_success(source_key)
             return chip
             
         except Exception as e:
             logger.error(f"[API错误] 获取 {stock_code} 筹码分布失败: {e}")
+            circuit_breaker.record_failure(source_key, str(e))
             return None
     
     def get_enhanced_data(self, stock_code: str, days: int = 60) -> Dict[str, Any]:
