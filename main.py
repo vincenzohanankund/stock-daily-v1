@@ -884,12 +884,11 @@ def run_concept_only(config: Config) -> int:
     """
     仅执行概念板块选股，写出结果文件，供 full 模式第一步使用。
 
-    full 模式写死：Top3 板块，每板块 2 只。
+    板块数量、每板块股票数：本地读 .env，GitHub 读 Action 传入的 env（secrets/vars）。
     退出码：0=拿到股票列表，1=拿到板块但无具体股票（已发飞书），2=板块获取失败。
     """
-    # full 模式写死参数
-    top_boards = 3
-    stocks_per_board = 2
+    top_boards = config.concept_board_top_n
+    stocks_per_board = config.concept_stocks_per_board
     output_list = os.getenv("CONCEPT_OUTPUT_LIST", "concept_stock_list.txt")
     summary_file = "concept_boards_summary.txt"
 

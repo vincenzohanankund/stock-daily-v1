@@ -49,12 +49,14 @@ jobs:
           echo "MODE=$MODE" >> $GITHUB_ENV
           echo "运行模式: $MODE"
 
-      # ========== full 模式 1：先尝试板块选股（写死 Top3 板块、每板块 2 只）==========
+      # ========== full 模式 1：先尝试板块选股（GitHub 用 secrets，本地用 .env）==========
       - name: 尝试板块选股
         id: concept
         if: env.MODE == 'full'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          CONCEPT_BOARD_TOP_N: ${{ secrets.CONCEPT_BOARD_TOP_N || '3' }}
+          CONCEPT_STOCKS_PER_BOARD: ${{ secrets.CONCEPT_STOCKS_PER_BOARD || '2' }}
         run: |
           python main.py --concept-only
           CONCEPT_EXIT=$?
@@ -79,8 +81,8 @@ jobs:
           WYCKOFF_RESULT_LIMIT: ${{ secrets.WYCKOFF_RESULT_LIMIT || '80' }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
         run: |
-          BATCH_SIZE=300
-          NUM_BATCHES=10
+          BATCH_SIZE=250
+          NUM_BATCHES=18
           BATCH_SLEEP=30
           for i in $(seq 0 $((NUM_BATCHES - 1))); do
             echo "========== 沙里淘金 第 $((i+1))/$NUM_BATCHES 批 (offset=$((i*BATCH_SIZE)), limit=$BATCH_SIZE) =========="
