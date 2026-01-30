@@ -14,7 +14,7 @@ on:
         default: 'full'
         type: choice
         options:
-          - full          # 完整分析（先沙里淘金取股票列表，再个股+大盘）
+          - full          # 完整分析（先板块→无股票则沙里淘金→个股+大盘）
           - market-only   # 仅大盘复盘
           - stocks-only   # 仅股票分析
           - wyckoff       # 仅沙里淘金
@@ -49,9 +49,22 @@ jobs:
           echo "MODE=$MODE" >> $GITHUB_ENV
           echo "运行模式: $MODE"
 
-      # ========== full 模式：分批执行沙里淘金（主板+创业板，30 天），降低限流风险，超时 2h ==========
-      - name: 执行沙里淘金（分批获取股票列表）
+      # ========== full 模式 1：先尝试板块选股（写死 Top3 板块、每板块 2 只）==========
+      - name: 尝试板块选股
+        id: concept
         if: env.MODE == 'full'
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          python main.py --concept-only
+          CONCEPT_EXIT=$?
+          echo "CONCEPT_EXIT=$CONCEPT_EXIT" >> $GITHUB_ENV
+          echo "板块选股退出码: $CONCEPT_EXIT (0=有股票 1=有板块无股票 2=失败)"
+          exit 0
+
+      # ========== full 模式 2：板块无股票或失败时，执行沙里淘金（分批，超时 2h）==========
+      - name: 执行沙里淘金（分批获取股票列表）
+        if: env.MODE == 'full' && env.CONCEPT_EXIT != '0'
         timeout-minutes: 120
         continue-on-error: true
         env:
@@ -81,9 +94,9 @@ jobs:
             fi
           done
 
-      # ========== full 模式：合并多批结果（去重）==========
+      # ========== full 模式：合并沙里淘金结果（去重）==========
       - name: 合并沙里淘金结果
-        if: env.MODE == 'full'
+        if: env.MODE == 'full' && env.CONCEPT_EXIT != '0'
         run: |
           cat wyckoff_batch_*.txt 2>/dev/null | sort -u > wyckoff_stock_list.txt || true
           if [ -s wyckoff_stock_list.txt ]; then
@@ -92,36 +105,43 @@ jobs:
             echo "无有效批次结果"
           fi
 
-      # ========== full 模式：根据沙里淘金结果确定 STOCK_LIST，成功/失败都发飞书 ==========
+      # ========== full 模式：确定 STOCK_LIST（板块成功用板块列表，否则用沙里淘金或回退），成功/失败都发飞书 ==========
       - name: 确定股票列表（full 模式）
         if: env.MODE == 'full'
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           STOCK_LIST_FALLBACK: ${{ secrets.STOCK_LIST || '600519' }}
         run: |
-          if [ -n "$FEISHU_WEBHOOK_URL" ]; then
-            if [ ! -f wyckoff_stock_list.txt ] || [ ! -s wyckoff_stock_list.txt ]; then
+          if [ -f concept_stock_list.txt ] && [ -s concept_stock_list.txt ]; then
+            echo "使用板块选股结果"
+            STOCK_LIST=$(paste -sd, concept_stock_list.txt)
+            echo "STOCK_LIST=$STOCK_LIST" >> $GITHUB_ENV
+            COUNT=$(wc -l < concept_stock_list.txt)
+            if [ -n "$FEISHU_WEBHOOK_URL" ]; then
               curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
                 -H "Content-Type: application/json" \
-                -d '{"msg_type":"text","content":{"text":"【每日股票分析】沙里淘金：未产出股票列表或执行失败，将使用仓库配置的 STOCK_LIST 执行后续分析。"}}' || true
-            else
-              TOTAL=$(wc -l < wyckoff_stock_list.txt)
-              BATCH_OK=0
-              for f in wyckoff_batch_*.txt; do
-                [ -f "$f" ] && [ -s "$f" ] && BATCH_OK=$((BATCH_OK+1))
-              done
-              curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"【每日股票分析】沙里淘金：完成，共 ${BATCH_OK} 批，合计 ${TOTAL} 只股票（去重），将作为今日 STOCK_LIST 执行后续个股分析。\"}}" || true
+                -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"【每日股票分析】板块选股：成功，共 ${COUNT} 只股票，将直接执行个股分析。\"}}" || true
             fi
-          fi
-          if [ ! -f wyckoff_stock_list.txt ] || [ ! -s wyckoff_stock_list.txt ]; then
-            echo "沙里淘金未产出股票列表或执行失败，将使用配置的 STOCK_LIST"
-            echo "STOCK_LIST=$STOCK_LIST_FALLBACK" >> $GITHUB_ENV
-          else
+          elif [ -f wyckoff_stock_list.txt ] && [ -s wyckoff_stock_list.txt ]; then
+            echo "使用沙里淘金结果"
             STOCK_LIST=$(paste -sd, wyckoff_stock_list.txt)
             echo "STOCK_LIST=$STOCK_LIST" >> $GITHUB_ENV
-            echo "使用沙里淘金结果，共 $(wc -l < wyckoff_stock_list.txt) 只股票"
+            TOTAL=$(wc -l < wyckoff_stock_list.txt)
+            BATCH_OK=0
+            for f in wyckoff_batch_*.txt; do [ -f "$f" ] && [ -s "$f" ] && BATCH_OK=$((BATCH_OK+1)); done
+            if [ -n "$FEISHU_WEBHOOK_URL" ]; then
+              curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"【每日股票分析】沙里淘金：完成，共 ${BATCH_OK} 批，合计 ${TOTAL} 只股票（去重），将执行后续个股分析。\"}}" || true
+            fi
+          else
+            echo "板块与沙里淘金均无结果，使用配置的 STOCK_LIST"
+            echo "STOCK_LIST=$STOCK_LIST_FALLBACK" >> $GITHUB_ENV
+            if [ -n "$FEISHU_WEBHOOK_URL" ]; then
+              curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d '{"msg_type":"text","content":{"text":"【每日股票分析】板块选股与沙里淘金均未产出股票列表，将使用仓库配置的 STOCK_LIST 执行后续分析。"}}' || true
+            fi
           fi
 
       # ========== market-only / stocks-only：使用仓库配置的 STOCK_LIST ==========
@@ -157,8 +177,8 @@ jobs:
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_FOLDER_TOKEN: ${{ secrets.FEISHU_FOLDER_TOKEN }}
           STOCK_LIST: ${{ env.STOCK_LIST }}
-          # 选股模式：manual=用 STOCK_LIST；concept=用概念板块 TopN 每板块若干只（需配置下面两项）
-          STOCK_LIST_MODE: ${{ vars.STOCK_LIST_MODE || secrets.STOCK_LIST_MODE || 'manual' }}
+          # full 模式已先做板块/沙里淘金，此处强制 manual 使用上面 STOCK_LIST；非 full 时可用 vars 配置
+          STOCK_LIST_MODE: ${{ env.MODE == 'full' && 'manual' || vars.STOCK_LIST_MODE || secrets.STOCK_LIST_MODE || 'manual' }}
           CONCEPT_BOARD_TOP_N: ${{ vars.CONCEPT_BOARD_TOP_N || secrets.CONCEPT_BOARD_TOP_N || '10' }}
           CONCEPT_STOCKS_PER_BOARD: ${{ vars.CONCEPT_STOCKS_PER_BOARD || secrets.CONCEPT_STOCKS_PER_BOARD || '6' }}
           LOG_LEVEL: INFO
@@ -167,8 +187,7 @@ jobs:
         run: |
           echo "=========================================="
           echo "运行模式: ${{ env.MODE }}"
-          echo "选股模式: $STOCK_LIST_MODE (Top$CONCEPT_BOARD_TOP_N 板块, 每板块 $CONCEPT_STOCKS_PER_BOARD 只)"
-          echo "自选股/回退: $STOCK_LIST"
+          echo "选股: $STOCK_LIST_MODE | 股票列表: $STOCK_LIST"
           echo "时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
           if [ "${{ env.MODE }}" = "market-only" ]; then
@@ -206,6 +225,8 @@ jobs:
           path: |
             reports/
             logs/
+            concept_stock_list.txt
+            concept_boards_summary.txt
             wyckoff_stock_list.txt
             wyckoff_batch_*.txt
           retention-days: 30
@@ -217,14 +238,7 @@ jobs:
           echo "=========================================="
           echo "分析完成"
           echo "=========================================="
-          if [ -d "reports" ]; then
-            echo "生成的报告:"
-            ls -la reports/
-          fi
-          if [ -f "wyckoff_stock_list.txt" ]; then
-            echo "沙里淘金合并列表行数: $(wc -l < wyckoff_stock_list.txt)"
-          fi
-          if ls wyckoff_batch_*.txt 1>/dev/null 2>&1; then
-            echo "沙里淘金批次文件:"
-            ls -la wyckoff_batch_*.txt
-          fi
+          if [ -d "reports" ]; then echo "报告:"; ls -la reports/; fi
+          if [ -f "concept_stock_list.txt" ]; then echo "板块选股列表: $(wc -l < concept_stock_list.txt) 只"; fi
+          if [ -f "wyckoff_stock_list.txt" ]; then echo "沙里淘金合并: $(wc -l < wyckoff_stock_list.txt) 只"; fi
+          if ls wyckoff_batch_*.txt 1>/dev/null 2>&1; then ls wyckoff_batch_*.txt; fi
