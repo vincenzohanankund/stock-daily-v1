@@ -1046,14 +1046,62 @@ class AkshareFetcher(BaseFetcher):
             logger.error(f"[API错误] 获取 {stock_code} 筹码分布失败: {e}")
             return None
     
+    def get_stock_name(self, stock_code: str) -> Optional[str]:
+        """
+        获取股票名称（通过个股信息接口）
+
+        数据来源：ak.stock_individual_info_em()
+
+        这是一个独立的股票名称获取方法，不依赖实时行情缓存，
+        用于解决实时行情获取失败时股票名称缺失的问题。
+
+        Args:
+            stock_code: 股票代码
+
+        Returns:
+            股票名称，获取失败返回 None
+        """
+        import akshare as ak
+
+        # ETF、港股、美股暂不支持此接口
+        if _is_etf_code(stock_code) or _is_hk_code(stock_code) or _is_us_code(stock_code):
+            logger.debug(f"[API跳过] {stock_code} 不是 A 股，跳过 stock_individual_info_em")
+            return None
+
+        try:
+            # 防封禁策略
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
+            logger.debug(f"[API调用] ak.stock_individual_info_em(symbol={stock_code}) 获取股票信息...")
+
+            df = ak.stock_individual_info_em(symbol=stock_code)
+
+            if df is None or df.empty:
+                logger.debug(f"[API返回] stock_individual_info_em 返回空数据")
+                return None
+
+            # 查找股票简称行
+            name_row = df[df['item'] == '股票简称']
+            if not name_row.empty:
+                stock_name = str(name_row.iloc[0]['value'])
+                logger.debug(f"[股票名称] {stock_code} -> {stock_name}")
+                return stock_name
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"[API错误] 获取 {stock_code} 股票名称失败: {e}")
+            return None
+
     def get_enhanced_data(self, stock_code: str, days: int = 60) -> Dict[str, Any]:
         """
         获取增强数据（历史K线 + 实时行情 + 筹码分布）
-        
+
         Args:
             stock_code: 股票代码
             days: 历史数据天数
-            
+
         Returns:
             包含所有数据的字典
         """

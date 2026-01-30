@@ -577,3 +577,29 @@ class DataFetcherManager:
             logger.error(f"[筹码分布] 获取 {stock_code} 失败: {e}")
             circuit_breaker.record_failure("akshare_chip", str(e))
             return None
+
+    def get_stock_name(self, stock_code: str) -> Optional[str]:
+        """
+        获取股票名称（通过个股信息接口）
+
+        当实时行情获取失败时，通过此接口独立获取股票名称，
+        避免名称显示为默认的 '股票{code}'。
+
+        Args:
+            stock_code: 股票代码
+
+        Returns:
+            股票名称，获取失败返回 None
+        """
+        try:
+            for fetcher in self._fetchers:
+                if fetcher.name == "AkshareFetcher":
+                    if hasattr(fetcher, 'get_stock_name'):
+                        name = fetcher.get_stock_name(stock_code)
+                        if name:
+                            return name
+                    break
+            return None
+        except Exception as e:
+            logger.warning(f"[股票名称] 获取 {stock_code} 名称失败: {e}")
+            return None

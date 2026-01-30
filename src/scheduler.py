@@ -85,20 +85,74 @@ class Scheduler:
     def set_daily_task(self, task: Callable, run_immediately: bool = True):
         """
         设置每日定时任务
-        
+
         Args:
             task: 要执行的任务函数（无参数）
             run_immediately: 是否在设置后立即执行一次
         """
         self._task_callback = task
-        
+
         # 设置每日定时任务
         self.schedule.every().day.at(self.schedule_time).do(self._safe_run_task)
         logger.info(f"已设置每日定时任务，执行时间: {self.schedule_time}")
-        
+
         if run_immediately:
             logger.info("立即执行一次任务...")
             self._safe_run_task()
+
+    def set_stock_name_refresh_task(self, refresh_time: str = "09:00"):
+        """
+        设置股票名称刷新任务（每日开盘前刷新，检测新股上市）
+
+        Args:
+            refresh_time: 刷新时间，默认每日 09:00（开盘前）
+        """
+        self.schedule.every().day.at(refresh_time).do(self._refresh_stock_names)
+        logger.info(f"已设置股票名称刷新任务，执行时间: {refresh_time}")
+
+    def _refresh_stock_names(self):
+        """
+        刷新股票名称缓存并检测新股上市
+
+        执行逻辑：
+        1. 调用 stock_name_service 刷新所有股票列表
+        2. 检测新股上市并记录日志
+        """
+        try:
+            logger.info("[定时任务] 开始刷新股票名称缓存...")
+
+            from src.stock_name_service import get_stock_name_service
+            service = get_stock_name_service()
+
+            # 检测新股并刷新
+            new_stocks = service.check_new_stocks()
+
+            # 统计
+            total_new = sum(len(v) for v in new_stocks.values())
+            if total_new > 0:
+                logger.info(f"[定时任务] 检测到 {total_new} 只新股上市")
+
+                # 记录新股详情
+                for market, stocks in new_stocks.items():
+                    if stocks:
+                        market_name = {'a_stocks': 'A股', 'hk_stocks': '港股', 'us_stocks': '美股'}.get(market, market)
+                        logger.info(f"[新股上市] {market_name}:")
+                        for code, name in stocks[:5]:
+                            logger.info(f"  - {code}: {name}")
+                        if len(stocks) > 5:
+                            logger.info(f"  ... 还有 {len(stocks) - 5} 只")
+            else:
+                logger.info("[定时任务] 股票名称缓存刷新完成，未检测到新股")
+
+            # 输出统计
+            stats = service.get_statistics()
+            logger.info(f"[定时任务] 当前缓存: A股 {stats['a_stocks_count']}, "
+                       f"港股 {stats['hk_stocks_count']}, 美股 {stats['us_stocks_count']}")
+
+        except ImportError as e:
+            logger.warning(f"[定时任务] stock_name_service 模块未安装: {e}")
+        except Exception as e:
+            logger.exception(f"[定时任务] 刷新股票名称失败: {e}")
     
     def _safe_run_task(self):
         """安全执行任务（带异常捕获）"""
@@ -153,18 +207,27 @@ class Scheduler:
 def run_with_schedule(
     task: Callable,
     schedule_time: str = "18:00",
-    run_immediately: bool = True
+    run_immediately: bool = True,
+    enable_stock_name_refresh: bool = True,
+    stock_name_refresh_time: str = "09:00"
 ):
     """
     便捷函数：使用定时调度运行任务
-    
+
     Args:
         task: 要执行的任务函数
         schedule_time: 每日执行时间
         run_immediately: 是否立即执行一次
+        enable_stock_name_refresh: 是否启用股票名称刷新任务（检测新股上市）
+        stock_name_refresh_time: 股票名称刷新时间
     """
     scheduler = Scheduler(schedule_time=schedule_time)
     scheduler.set_daily_task(task, run_immediately=run_immediately)
+
+    # 启用股票名称刷新任务（每日检测新股上市）
+    if enable_stock_name_refresh:
+        scheduler.set_stock_name_refresh_task(refresh_time=stock_name_refresh_time)
+
     scheduler.run()
 
 
