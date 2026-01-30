@@ -290,13 +290,10 @@ class DataFetcherManager:
 
         # 初始化数据源列表
         self._fetchers = [
-            tushare,
-<<<<<<< HEAD
-            akshare,
             efinance,
-=======
+            akshare,
+            tushare,
             pytdx,
->>>>>>> ea3ce3c8034cb553ed2f2ac97fada6ce658dc6c4
             baostock,
             yfinance,
         ]
