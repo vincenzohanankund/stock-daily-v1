@@ -535,12 +535,8 @@ if __name__ == "__main__":
     fetcher = TushareFetcher()
     
     try:
-<<<<<<< HEAD
-        df = fetcher.get_daily_data('601179')  # 茅台
-=======
         # 测试历史数据
         df = fetcher.get_daily_data('600519')  # 茅台
->>>>>>> ea3ce3c8034cb553ed2f2ac97fada6ce658dc6c4
         print(f"获取成功，共 {len(df)} 条数据")
         print(df.tail())
         
