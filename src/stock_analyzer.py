@@ -16,6 +16,36 @@
 - 量能形态：缩量回调优先
 """
 
+"""
+交易理念核心原则：
+### 1. 严进策略（不追高）
+- **绝对不追高**：当股价偏离 MA7 超过 6% 时，坚决不买入
+- **乖离率公式**：(现价 - MA7) / MA7 × 100%
+- 乖离率 < 3%：最佳买点区间
+- 乖离率 3-6%：可小仓介入
+- 乖离率 > 6%：严禁追高！直接判定为"观望"
+### 2. 趋势交易（顺势而为）
+- **多头排列必须条件**：MA7 > MA13 > MA24
+- 只做多头排列的股票，空头排列坚决不碰
+- 均线发散上行优于均线粘合
+- 趋势强度判断：看均线间距是否在扩大
+### 3. 效率优先（筹码结构）
+- 关注筹码集中度：90%集中度 < 15% 表示筹码集中
+- 获利比例分析：70-90% 获利盘时需警惕获利回吐
+- 平均成本与现价关系：现价高于平均成本 5-15% 为健康
+### 4. 买点偏好（回踩支撑）
+- **最佳买点**：缩量回踩 MA7 获得支撑
+- **次优买点**：回踩 MA13 获得支撑
+- **观望情况**：跌破 MA24 时观望
+### 5. 风险排查重点
+- 减持公告（股东、高管减持）
+- 业绩预亏/大幅下滑
+- 监管处罚/立案调查
+- 行业政策利空
+- 大额解禁
+"""
+
+
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Tuple
@@ -29,13 +59,13 @@ logger = logging.getLogger(__name__)
 
 class TrendStatus(Enum):
     """趋势状态枚举"""
-    STRONG_BULL = "强势多头"      # MA5 > MA10 > MA20，且间距扩大
-    BULL = "多头排列"             # MA5 > MA10 > MA20
-    WEAK_BULL = "弱势多头"        # MA5 > MA10，但 MA10 < MA20
+    STRONG_BULL = "强势多头"      # MA7 > MA13 > MA24，且间距扩大
+    BULL = "多头排列"             # MA7 > MA13 > MA24
+    WEAK_BULL = "弱势多头"        # MA7 > MA13，但 MA13 < MA24
     CONSOLIDATION = "盘整"        # 均线缠绕
-    WEAK_BEAR = "弱势空头"        # MA5 < MA10，但 MA10 > MA20
-    BEAR = "空头排列"             # MA5 < MA10 < MA20
-    STRONG_BEAR = "强势空头"      # MA5 < MA10 < MA20，且间距扩大
+    WEAK_BEAR = "弱势空头"        # MA7 < MA13，但 MA13 > MA24
+    BEAR = "空头排列"             # MA7 < MA13 < MA24
+    STRONG_BEAR = "强势空头"      # MA7 < MA13 < MA24，且间距扩大
 
 
 class VolumeStatus(Enum):
@@ -88,25 +118,25 @@ class TrendAnalysisResult:
     trend_strength: float = 0.0      # 趋势强度 0-100
     
     # 均线数据
-    ma5: float = 0.0
-    ma10: float = 0.0
-    ma20: float = 0.0
+    ma7: float = 0.0
+    ma13: float = 0.0
+    ma24: float = 0.0
     ma60: float = 0.0
     current_price: float = 0.0
     
-    # 乖离率（与 MA5 的偏离度）
-    bias_ma5: float = 0.0            # (Close - MA5) / MA5 * 100
-    bias_ma10: float = 0.0
-    bias_ma20: float = 0.0
+    # 乖离率（与 MA7 的偏离度）
+    bias_ma7: float = 0.0            # (Close - MA7) / MA7 * 100
+    bias_ma13: float = 0.0
+    bias_ma24: float = 0.0
     
     # 量能分析
     volume_status: VolumeStatus = VolumeStatus.NORMAL
-    volume_ratio_5d: float = 0.0     # 当日成交量/5日均量
+    volume_ratio_7d: float = 0.0     # 当日成交量/7日均量
     volume_trend: str = ""           # 量能趋势描述
     
     # 支撑压力
-    support_ma5: bool = False        # MA5 是否构成支撑
-    support_ma10: bool = False       # MA10 是否构成支撑
+    support_ma7: bool = False        # MA7 是否构成支撑
+    support_ma13: bool = False       # MA13 是否构成支撑
     resistance_levels: List[float] = field(default_factory=list)
     support_levels: List[float] = field(default_factory=list)
 
@@ -136,19 +166,19 @@ class TrendAnalysisResult:
             'trend_status': self.trend_status.value,
             'ma_alignment': self.ma_alignment,
             'trend_strength': self.trend_strength,
-            'ma5': self.ma5,
-            'ma10': self.ma10,
-            'ma20': self.ma20,
+            'ma7': self.ma7,
+            'ma13': self.ma13,
+            'ma24': self.ma24,
             'ma60': self.ma60,
             'current_price': self.current_price,
-            'bias_ma5': self.bias_ma5,
-            'bias_ma10': self.bias_ma10,
-            'bias_ma20': self.bias_ma20,
+            'bias_ma7': self.bias_ma7,
+            'bias_ma13': self.bias_ma13,
+            'bias_ma24': self.bias_ma24,
             'volume_status': self.volume_status.value,
-            'volume_ratio_5d': self.volume_ratio_5d,
+            'volume_ratio_7d': self.volume_ratio_7d,
             'volume_trend': self.volume_trend,
-            'support_ma5': self.support_ma5,
-            'support_ma10': self.support_ma10,
+            'support_ma7': self.support_ma7,
+            'support_ma13': self.support_ma13,
             'buy_signal': self.buy_signal.value,
             'signal_score': self.signal_score,
             'signal_reasons': self.signal_reasons,
@@ -171,17 +201,17 @@ class StockTrendAnalyzer:
     股票趋势分析器
 
     基于用户交易理念实现：
-    1. 趋势判断 - MA5>MA10>MA20 多头排列
-    2. 乖离率检测 - 不追高，偏离 MA5 超过 5% 不买
+    1. 趋势判断 - MA7>MA13>MA24 多头排列
+    2. 乖离率检测 - 不追高，偏离 MA7 超过 6% 不买
     3. 量能分析 - 偏好缩量回调
-    4. 买点识别 - 回踩 MA5/MA10 支撑
+    4. 买点识别 - 回踩 MA7/MA13 支撑
     5. MACD 指标 - 趋势确认和金叉死叉信号
     6. RSI 指标 - 超买超卖判断
     """
     
     # 交易参数配置
-    BIAS_THRESHOLD = 5.0        # 乖离率阈值（%），超过此值不买入
-    VOLUME_SHRINK_RATIO = 0.7   # 缩量判断阈值（当日量/5日均量）
+    BIAS_THRESHOLD = 6.0        # 乖离率阈值（%），超过此值不买入
+    VOLUME_SHRINK_RATIO = 0.7   # 缩量判断阈值（当日量/7日均量）
     VOLUME_HEAVY_RATIO = 1.5    # 放量判断阈值
     MA_SUPPORT_TOLERANCE = 0.02  # MA 支撑判断容忍度（2%）
 
@@ -232,9 +262,9 @@ class StockTrendAnalyzer:
         # 获取最新数据
         latest = df.iloc[-1]
         result.current_price = float(latest['close'])
-        result.ma5 = float(latest['MA5'])
-        result.ma10 = float(latest['MA10'])
-        result.ma20 = float(latest['MA20'])
+        result.ma7 = float(latest['MA7'])
+        result.ma13 = float(latest['MA13'])
+        result.ma24 = float(latest['MA24'])
         result.ma60 = float(latest.get('MA60', 0))
 
         # 1. 趋势判断
@@ -263,13 +293,14 @@ class StockTrendAnalyzer:
     def _calculate_mas(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算均线"""
         df = df.copy()
-        df['MA5'] = df['close'].rolling(window=5).mean()
-        df['MA10'] = df['close'].rolling(window=10).mean()
-        df['MA20'] = df['close'].rolling(window=20).mean()
+        print(f'计算均线前打印数据: {df}')
+        df['MA7'] = df['close'].rolling(window=7).mean()
+        df['MA13'] = df['close'].rolling(window=13).mean()
+        df['MA24'] = df['close'].rolling(window=24).mean()
         if len(df) >= 60:
             df['MA60'] = df['close'].rolling(window=60).mean()
         else:
-            df['MA60'] = df['MA20']  # 数据不足时使用 MA20 替代
+            df['MA60'] = df['MA24']  # 数据不足时使用 MA24 替代
         return df
 
     def _calculate_macd(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -341,14 +372,14 @@ class StockTrendAnalyzer:
         
         核心逻辑：判断均线排列和趋势强度
         """
-        ma5, ma10, ma20 = result.ma5, result.ma10, result.ma20
+        ma7, ma13, ma24 = result.ma7, result.ma13, result.ma24
         
         # 判断均线排列
-        if ma5 > ma10 > ma20:
+        if ma7 > ma13 > ma24:
             # 检查间距是否在扩大（强势）
             prev = df.iloc[-5] if len(df) >= 5 else df.iloc[-1]
-            prev_spread = (prev['MA5'] - prev['MA20']) / prev['MA20'] * 100 if prev['MA20'] > 0 else 0
-            curr_spread = (ma5 - ma20) / ma20 * 100 if ma20 > 0 else 0
+            prev_spread = (prev['MA7'] - prev['MA24']) / prev['MA24'] * 100 if prev['MA24'] > 0 else 0
+            curr_spread = (ma7 - ma24) / ma24 * 100 if ma24 > 0 else 0
             
             if curr_spread > prev_spread and curr_spread > 5:
                 result.trend_status = TrendStatus.STRONG_BULL
@@ -356,18 +387,18 @@ class StockTrendAnalyzer:
                 result.trend_strength = 90
             else:
                 result.trend_status = TrendStatus.BULL
-                result.ma_alignment = "多头排列 MA5>MA10>MA20"
+                result.ma_alignment = "多头排列 MA7>MA13>MA24"
                 result.trend_strength = 75
                 
-        elif ma5 > ma10 and ma10 <= ma20:
+        elif ma7 > ma13 and ma13 <= ma24:
             result.trend_status = TrendStatus.WEAK_BULL
-            result.ma_alignment = "弱势多头，MA5>MA10 但 MA10≤MA20"
+            result.ma_alignment = "弱势多头，MA7>MA13 但 MA13≤MA24"
             result.trend_strength = 55
             
-        elif ma5 < ma10 < ma20:
+        elif ma7 < ma13 < ma24:
             prev = df.iloc[-5] if len(df) >= 5 else df.iloc[-1]
-            prev_spread = (prev['MA20'] - prev['MA5']) / prev['MA5'] * 100 if prev['MA5'] > 0 else 0
-            curr_spread = (ma20 - ma5) / ma5 * 100 if ma5 > 0 else 0
+            prev_spread = (prev['MA24'] - prev['MA7']) / prev['MA7'] * 100 if prev['MA7'] > 0 else 0
+            curr_spread = (ma24 - ma7) / ma7 * 100 if ma7 > 0 else 0
             
             if curr_spread > prev_spread and curr_spread > 5:
                 result.trend_status = TrendStatus.STRONG_BEAR
@@ -375,12 +406,12 @@ class StockTrendAnalyzer:
                 result.trend_strength = 10
             else:
                 result.trend_status = TrendStatus.BEAR
-                result.ma_alignment = "空头排列 MA5<MA10<MA20"
+                result.ma_alignment = "空头排列 MA7<MA13<MA24"
                 result.trend_strength = 25
                 
-        elif ma5 < ma10 and ma10 >= ma20:
+        elif ma7 < ma13 and ma13 >= ma24:
             result.trend_status = TrendStatus.WEAK_BEAR
-            result.ma_alignment = "弱势空头，MA5<MA10 但 MA10≥MA20"
+            result.ma_alignment = "弱势空头，MA7<MA13 但 MA13≥MA24"
             result.trend_strength = 40
             
         else:
@@ -398,12 +429,12 @@ class StockTrendAnalyzer:
         """
         price = result.current_price
         
-        if result.ma5 > 0:
-            result.bias_ma5 = (price - result.ma5) / result.ma5 * 100
-        if result.ma10 > 0:
-            result.bias_ma10 = (price - result.ma10) / result.ma10 * 100
-        if result.ma20 > 0:
-            result.bias_ma20 = (price - result.ma20) / result.ma20 * 100
+        if result.ma7 > 0:
+            result.bias_ma7 = (price - result.ma7) / result.ma7 * 100
+        if result.ma13 > 0:
+            result.bias_ma13 = (price - result.ma13) / result.ma13 * 100
+        if result.ma24 > 0:
+            result.bias_ma20 = (price - result.ma24) / result.ma24 * 100
     
     def _analyze_volume(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
         """
@@ -411,28 +442,28 @@ class StockTrendAnalyzer:
         
         偏好：缩量回调 > 放量上涨 > 缩量上涨 > 放量下跌
         """
-        if len(df) < 5:
+        if len(df) < 7:
             return
         
         latest = df.iloc[-1]
-        vol_5d_avg = df['volume'].iloc[-6:-1].mean()
+        vol_7d_avg = df['volume'].iloc[-8:-1].mean()
         
-        if vol_5d_avg > 0:
-            result.volume_ratio_5d = float(latest['volume']) / vol_5d_avg
+        if vol_7d_avg > 0:
+            result.volume_ratio_7d = float(latest['volume']) / vol_7d_avg
         
         # 判断价格变化
         prev_close = df.iloc[-2]['close']
         price_change = (latest['close'] - prev_close) / prev_close * 100
         
         # 量能状态判断
-        if result.volume_ratio_5d >= self.VOLUME_HEAVY_RATIO:
+        if result.volume_ratio_7d >= self.VOLUME_HEAVY_RATIO:
             if price_change > 0:
                 result.volume_status = VolumeStatus.HEAVY_VOLUME_UP
                 result.volume_trend = "放量上涨，多头力量强劲"
             else:
                 result.volume_status = VolumeStatus.HEAVY_VOLUME_DOWN
                 result.volume_trend = "放量下跌，注意风险"
-        elif result.volume_ratio_5d <= self.VOLUME_SHRINK_RATIO:
+        elif result.volume_ratio_7d <= self.VOLUME_SHRINK_RATIO:
             if price_change > 0:
                 result.volume_status = VolumeStatus.SHRINK_VOLUME_UP
                 result.volume_trend = "缩量上涨，上攻动能不足"
@@ -447,32 +478,32 @@ class StockTrendAnalyzer:
         """
         分析支撑压力位
         
-        买点偏好：回踩 MA5/MA10 获得支撑
+        买点偏好：回踩 MA7/MA13 获得支撑
         """
         price = result.current_price
         
-        # 检查是否在 MA5 附近获得支撑
-        if result.ma5 > 0:
-            ma5_distance = abs(price - result.ma5) / result.ma5
-            if ma5_distance <= self.MA_SUPPORT_TOLERANCE and price >= result.ma5:
-                result.support_ma5 = True
-                result.support_levels.append(result.ma5)
+        # 检查是否在 MA7 附近获得支撑
+        if result.ma7 > 0:
+            ma7_distance = abs(price - result.ma7) / result.ma7
+            if ma7_distance <= self.MA_SUPPORT_TOLERANCE and price >= result.ma7:
+                result.support_ma7 = True
+                result.support_levels.append(result.ma7)
         
-        # 检查是否在 MA10 附近获得支撑
-        if result.ma10 > 0:
-            ma10_distance = abs(price - result.ma10) / result.ma10
-            if ma10_distance <= self.MA_SUPPORT_TOLERANCE and price >= result.ma10:
-                result.support_ma10 = True
-                if result.ma10 not in result.support_levels:
-                    result.support_levels.append(result.ma10)
+        # 检查是否在 MA13 附近获得支撑
+        if result.ma13 > 0:
+            ma13_distance = abs(price - result.ma13) / result.ma13
+            if ma13_distance <= self.MA_SUPPORT_TOLERANCE and price >= result.ma13:
+                result.support_ma13 = True
+                if result.ma13 not in result.support_levels:
+                    result.support_levels.append(result.ma13)
         
-        # MA20 作为重要支撑
-        if result.ma20 > 0 and price >= result.ma20:
-            result.support_levels.append(result.ma20)
+        # MA24 作为重要支撑
+        if result.ma24 > 0 and price >= result.ma24:
+            result.support_levels.append(result.ma24)
         
         # 近期高点作为压力
-        if len(df) >= 20:
-            recent_high = df['high'].iloc[-20:].max()
+        if len(df) >= 24:
+            recent_high = df['high'].iloc[-24:].max()
             if recent_high > price:
                 result.resistance_levels.append(recent_high)
 
@@ -585,7 +616,7 @@ class StockTrendAnalyzer:
 
         综合评分系统：
         - 趋势（30分）：多头排列得分高
-        - 乖离率（20分）：接近 MA5 得分高
+        - 乖离率（20分）：接近 MA7 得分高
         - 量能（15分）：缩量回调得分高
         - 支撑（10分）：获得均线支撑得分高
         - MACD（15分）：金叉和多头得分高
@@ -614,27 +645,27 @@ class StockTrendAnalyzer:
             risks.append(f"⚠️ {result.trend_status.value}，不宜做多")
 
         # === 乖离率评分（20分）===
-        bias = result.bias_ma5
+        bias = result.bias_ma7
         if bias < 0:
-            # 价格在 MA5 下方（回调中）
+            # 价格在 MA7 下方（回调中）
             if bias > -3:
                 score += 20
-                reasons.append(f"✅ 价格略低于MA5({bias:.1f}%)，回踩买点")
+                reasons.append(f"✅ 价格略低于MA7({bias:.1f}%)，回踩买点")
             elif bias > -5:
                 score += 16
-                reasons.append(f"✅ 价格回踩MA5({bias:.1f}%)，观察支撑")
+                reasons.append(f"✅ 价格回踩MA7({bias:.1f}%)，观察支撑")
             else:
                 score += 8
                 risks.append(f"⚠️ 乖离率过大({bias:.1f}%)，可能破位")
-        elif bias < 2:
+        elif bias < 3:
             score += 18
-            reasons.append(f"✅ 价格贴近MA5({bias:.1f}%)，介入好时机")
+            reasons.append(f"✅ 价格贴近MA7({bias:.1f}%)，介入好时机")
         elif bias < self.BIAS_THRESHOLD:
             score += 14
-            reasons.append(f"⚡ 价格略高于MA5({bias:.1f}%)，可小仓介入")
+            reasons.append(f"⚡ 价格略高于MA7({bias:.1f}%)，可小仓介入")
         else:
             score += 4
-            risks.append(f"❌ 乖离率过高({bias:.1f}%>5%)，严禁追高！")
+            risks.append(f"❌ 乖离率过高({bias:.1f}%>6%)，严禁追高！")
 
         # === 量能评分（15分）===
         volume_scores = {
@@ -653,12 +684,12 @@ class StockTrendAnalyzer:
             risks.append("⚠️ 放量下跌，注意风险")
 
         # === 支撑评分（10分）===
-        if result.support_ma5:
+        if result.support_ma7:
             score += 5
-            reasons.append("✅ MA5支撑有效")
-        if result.support_ma10:
+            reasons.append("✅ MA7支撑有效")
+        if result.support_ma13:
             score += 5
-            reasons.append("✅ MA10支撑有效")
+            reasons.append("✅ MA13支撑有效")
 
         # === MACD 评分（15分）===
         macd_scores = {
@@ -736,12 +767,12 @@ class StockTrendAnalyzer:
             f"",
             f"📈 均线数据:",
             f"   现价: {result.current_price:.2f}",
-            f"   MA5:  {result.ma5:.2f} (乖离 {result.bias_ma5:+.2f}%)",
-            f"   MA10: {result.ma10:.2f} (乖离 {result.bias_ma10:+.2f}%)",
-            f"   MA20: {result.ma20:.2f} (乖离 {result.bias_ma20:+.2f}%)",
+            f"   MA7:  {result.ma7:.2f} (乖离 {result.bias_ma7:+.2f}%)",
+            f"   MA13: {result.ma13:.2f} (乖离 {result.bias_ma13:+.2f}%)",
+            f"   MA24: {result.ma24:.2f} (乖离 {result.bias_ma24:+.2f}%)",
             f"",
             f"📊 量能分析: {result.volume_status.value}",
-            f"   量比(vs5日): {result.volume_ratio_5d:.2f}",
+            f"   量比(vs7日): {result.volume_ratio_7d:.2f}",
             f"   量能趋势: {result.volume_trend}",
             f"",
             f"📈 MACD指标: {result.macd_status.value}",

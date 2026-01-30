@@ -75,7 +75,7 @@ class StockAnalysisPipeline:
         )
         
         logger.info(f"调度器初始化完成，最大并发数: {self.max_workers}")
-        logger.info("已启用趋势分析器 (MA5>MA10>MA20 多头判断)")
+        logger.info("已启用趋势分析器 (MA7>MA13>MA24 多头判断)")
         # 打印实时行情/筹码配置状态
         if self.config.enable_realtime_quote:
             logger.info(f"实时行情已启用 (优先级: {self.config.realtime_source_priority})")
@@ -334,8 +334,8 @@ class StockAnalysisPipeline:
                 'trend_status': trend_result.trend_status.value,
                 'ma_alignment': trend_result.ma_alignment,
                 'trend_strength': trend_result.trend_strength,
-                'bias_ma5': trend_result.bias_ma5,
-                'bias_ma10': trend_result.bias_ma10,
+                'bias_ma7': trend_result.bias_ma7,
+                'bias_ma13': trend_result.bias_ma13,
                 'volume_status': trend_result.volume_status.value,
                 'volume_trend': trend_result.volume_trend,
                 'buy_signal': trend_result.buy_signal.value,
@@ -350,7 +350,7 @@ class StockAnalysisPipeline:
         """
         量比描述
         
-        量比 = 当前成交量 / 过去5日平均成交量
+        量比 = 当前成交量 / 过去7日平均成交量
         """
         if volume_ratio < 0.5:
             return "极度萎缩"
