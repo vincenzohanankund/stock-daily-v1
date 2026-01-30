@@ -67,3 +67,4 @@ local/
 run.sh
 
 verify_*.py
+tmpclaude-*-cwd

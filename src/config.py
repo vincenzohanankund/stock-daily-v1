@@ -123,7 +123,8 @@ class Config:
     
     # === 定时任务配置 ===
     schedule_enabled: bool = False            # 是否启用定时任务
-    schedule_time: str = "18:00"              # 每日推送时间（HH:MM 格式）
+    schedule_time: str = "18:00"              # 每日推送时间（HH:MM 格式，已废弃，请使用 schedule_times）
+    schedule_times: List[str] = field(default_factory=list)  # 每日推送时间列表（HH:MM 格式，逗号分隔）
     market_review_enabled: bool = True        # 是否启用大盘复盘
 
     # === 实时行情增强数据配置 ===
@@ -284,6 +285,15 @@ class Config:
         serpapi_keys_str = os.getenv('SERPAPI_API_KEYS', '')
         serpapi_keys = [k.strip() for k in serpapi_keys_str.split(',') if k.strip()]
         
+        # 解析定时任务时间列表（支持多个时间点，逗号分隔）
+        schedule_times_str = os.getenv('SCHEDULE_TIMES', '')
+        schedule_times = [t.strip() for t in schedule_times_str.split(',') if t.strip()]
+        
+        # 如果没有配置 schedule_times，则使用 schedule_time（向后兼容）
+        if not schedule_times:
+            schedule_time = os.getenv('SCHEDULE_TIME', '18:00')
+            schedule_times = [schedule_time]
+        
         return cls(
             stock_list=stock_list,
             feishu_app_id=os.getenv('FEISHU_APP_ID'),
@@ -333,6 +343,7 @@ class Config:
             https_proxy=os.getenv('HTTPS_PROXY'),
             schedule_enabled=os.getenv('SCHEDULE_ENABLED', 'false').lower() == 'true',
             schedule_time=os.getenv('SCHEDULE_TIME', '18:00'),
+            schedule_times=schedule_times,
             market_review_enabled=os.getenv('MARKET_REVIEW_ENABLED', 'true').lower() == 'true',
             webui_enabled=os.getenv('WEBUI_ENABLED', 'false').lower() == 'true',
             webui_host=os.getenv('WEBUI_HOST', '127.0.0.1'),

@@ -417,7 +417,7 @@ def main() -> int:
         # 模式2: 定时任务模式
         if args.schedule or config.schedule_enabled:
             logger.info("模式: 定时任务")
-            logger.info(f"每日执行时间: {config.schedule_time}")
+            logger.info(f"每日执行时间: {', '.join(config.schedule_times)}")
             
             from src.scheduler import run_with_schedule
             
@@ -427,6 +427,7 @@ def main() -> int:
             run_with_schedule(
                 task=scheduled_task,
                 schedule_time=config.schedule_time,
+                schedule_times=config.schedule_times,
                 run_immediately=True  # 启动时先执行一次
             )
             return 0

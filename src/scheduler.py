@@ -63,12 +63,13 @@ class Scheduler:
     - 优雅退出
     """
     
-    def __init__(self, schedule_time: str = "18:00"):
+    def __init__(self, schedule_time: str = "18:00", schedule_times: Optional[list] = None):
         """
         初始化调度器
         
         Args:
-            schedule_time: 每日执行时间，格式 "HH:MM"
+            schedule_time: 每日执行时间，格式 "HH:MM"（已废弃，请使用 schedule_times）
+            schedule_times: 每日执行时间列表，格式 ["HH:MM", "HH:MM", ...]
         """
         try:
             import schedule
@@ -78,6 +79,7 @@ class Scheduler:
             raise ImportError("请安装 schedule 库: pip install schedule")
         
         self.schedule_time = schedule_time
+        self.schedule_times = schedule_times if schedule_times else [schedule_time]
         self.shutdown_handler = GracefulShutdown()
         self._task_callback: Optional[Callable] = None
         self._running = False
@@ -92,9 +94,11 @@ class Scheduler:
         """
         self._task_callback = task
         
-        # 设置每日定时任务
-        self.schedule.every().day.at(self.schedule_time).do(self._safe_run_task)
-        logger.info(f"已设置每日定时任务，执行时间: {self.schedule_time}")
+        # 为每个时间点设置每日定时任务
+        for time_str in self.schedule_times:
+            self.schedule.every().day.at(time_str).do(self._safe_run_task)
+        
+        logger.info(f"已设置每日定时任务，执行时间: {', '.join(self.schedule_times)}")
         
         if run_immediately:
             logger.info("立即执行一次任务...")
@@ -153,6 +157,7 @@ class Scheduler:
 def run_with_schedule(
     task: Callable,
     schedule_time: str = "18:00",
+    schedule_times: Optional[list] = None,
     run_immediately: bool = True
 ):
     """
@@ -160,10 +165,11 @@ def run_with_schedule(
     
     Args:
         task: 要执行的任务函数
-        schedule_time: 每日执行时间
+        schedule_time: 每日执行时间（已废弃，请使用 schedule_times）
+        schedule_times: 每日执行时间列表，格式 ["HH:MM", "HH:MM", ...]
         run_immediately: 是否立即执行一次
     """
-    scheduler = Scheduler(schedule_time=schedule_time)
+    scheduler = Scheduler(schedule_time=schedule_time, schedule_times=schedule_times)
     scheduler.set_daily_task(task, run_immediately=run_immediately)
     scheduler.run()
 
