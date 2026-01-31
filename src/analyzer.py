@@ -1123,151 +1123,237 @@ class GeminiAnalyzer:
         name: str
     ) -> AnalysisResult:
         """
-        解析 Gemini 响应（决策仪表盘版）
+        解析 Gemini 响应（决策仪表盘版）- 高容错版本
         
-        尝试从响应中提取 JSON 格式的分析结果，包含 dashboard 字段
-        如果解析失败，尝试智能提取或返回默认结果
+        多层容错机制：
+        1. 清洗 Markdown 代码块标记
+        2. 尝试直接解析 JSON
+        3. 修复 JSON 后再次尝试解析
+        4. 如果都失败，使用正则表达式提取关键信息（终极兜底）
         """
-        try:
-            # 清理响应文本：移除 markdown 代码块标记
-            cleaned_text = response_text
-            if '```json' in cleaned_text:
-                cleaned_text = cleaned_text.replace('```json', '').replace('```', '')
-            elif '```' in cleaned_text:
-                cleaned_text = cleaned_text.replace('```', '')
+        # 第一步：清洗 Markdown 代码块标记
+        cleaned_text = response_text.strip()
+        if '```json' in cleaned_text:
+            # 移除 ```json 和 ``` 标记
+            cleaned_text = cleaned_text.replace('```json', '').replace('```', '').strip()
+        elif '```' in cleaned_text:
+            cleaned_text = cleaned_text.replace('```', '').strip()
+        
+        # 第二步：尝试直接解析 JSON
+        json_start = cleaned_text.find('{')
+        json_end = cleaned_text.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = cleaned_text[json_start:json_end]
             
-            # 尝试找到 JSON 内容
-            json_start = cleaned_text.find('{')
-            json_end = cleaned_text.rfind('}') + 1
-            
-            if json_start >= 0 and json_end > json_start:
-                json_str = cleaned_text[json_start:json_end]
-                
-                # 尝试修复常见的 JSON 问题
-                json_str = self._fix_json_string(json_str)
-                
+            try:
+                # 尝试直接解析
                 data = json.loads(json_str)
-                
-                # 提取 dashboard 数据
-                dashboard = data.get('dashboard', None)
-                
-                # 解析所有字段，使用默认值防止缺失
-                return AnalysisResult(
-                    code=code,
-                    name=name,
-                    # 核心指标
-                    sentiment_score=int(data.get('sentiment_score', 50)),
-                    trend_prediction=data.get('trend_prediction', '震荡'),
-                    operation_advice=data.get('operation_advice', '持有'),
-                    confidence_level=data.get('confidence_level', '中'),
-                    # 决策仪表盘
-                    dashboard=dashboard,
-                    # 走势分析
-                    trend_analysis=data.get('trend_analysis', ''),
-                    short_term_outlook=data.get('short_term_outlook', ''),
-                    medium_term_outlook=data.get('medium_term_outlook', ''),
-                    # 技术面
-                    technical_analysis=data.get('technical_analysis', ''),
-                    ma_analysis=data.get('ma_analysis', ''),
-                    volume_analysis=data.get('volume_analysis', ''),
-                    pattern_analysis=data.get('pattern_analysis', ''),
-                    # 基本面
-                    fundamental_analysis=data.get('fundamental_analysis', ''),
-                    sector_position=data.get('sector_position', ''),
-                    company_highlights=data.get('company_highlights', ''),
-                    # 情绪面/消息面
-                    news_summary=data.get('news_summary', ''),
-                    market_sentiment=data.get('market_sentiment', ''),
-                    hot_topics=data.get('hot_topics', ''),
-                    # 综合
-                    analysis_summary=data.get('analysis_summary', '分析完成'),
-                    key_points=data.get('key_points', ''),
-                    risk_warning=data.get('risk_warning', ''),
-                    buy_reason=data.get('buy_reason', ''),
-                    # 元数据
-                    search_performed=data.get('search_performed', False),
-                    data_sources=data.get('data_sources', '技术面数据'),
-                    success=True,
-                )
-            else:
-                # 没有找到 JSON，尝试从纯文本中提取信息
-                logger.warning(f"无法从响应中提取 JSON，使用原始文本分析")
-                return self._parse_text_response(response_text, code, name)
-                
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON 解析失败: {e}，尝试从文本提取")
-            return self._parse_text_response(response_text, code, name)
+                return self._build_analysis_result(data, code, name)
+            except json.JSONDecodeError:
+                # 第三步：修复 JSON 后再次尝试
+                try:
+                    fixed_json = self._fix_json_string(json_str)
+                    data = json.loads(fixed_json)
+                    logger.info(f"[{code}] JSON 修复后解析成功")
+                    return self._build_analysis_result(data, code, name)
+                except json.JSONDecodeError as e:
+                    # 第四步：终极兜底 - 使用正则表达式提取
+                    logger.warning(f"[{code}] JSON 修复后仍解析失败: {e}，使用正则表达式兜底提取")
+                    return self._parse_text_response_via_regex(response_text, code, name)
+        else:
+            # 没有找到 JSON 结构，直接使用正则表达式兜底
+            logger.warning(f"[{code}] 无法找到 JSON 结构，使用正则表达式兜底提取")
+            return self._parse_text_response_via_regex(response_text, code, name)
     
     def _fix_json_string(self, json_str: str) -> str:
-        """修复常见的 JSON 格式错误"""
+        """
+        修复常见的 JSON 格式错误（增强版）
+        
+        修复项：
+        1. 去除 // 和 /* */ 风格的注释
+        2. 将中文标点（冒号：，逗号，，双引号""）替换为英文标点
+        3. 修复尾随逗号（trailing commas）
+        4. 修复 Python 风格的布尔值（True/False -> true/false）
+        5. 尝试补全末尾缺失的大括号 }
+        """
         import re
         
-        # 1. 替换中文符号
-        json_str = json_str.replace('：', ':').replace('，', ',').replace('“', '"').replace('”', '"')
-        
-        # 2. 移除注释 (// 或 /* */)
-        json_str = re.sub(r'//.*?\n', '\n', json_str)
+        # 1. 移除注释 (// 或 /* */) - 必须在替换标点之前
+        # 移除单行注释 // ... \n
+        json_str = re.sub(r'//.*?\n', '\n', json_str, flags=re.MULTILINE)
+        # 移除多行注释 /* ... */
         json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+        
+        # 2. 替换中文标点为英文标点
+        json_str = json_str.replace('：', ':')  # 中文冒号
+        json_str = json_str.replace('，', ',')  # 中文逗号
+        json_str = json_str.replace('"', '"')   # 中文左双引号
+        json_str = json_str.replace('"', '"')   # 中文右双引号
+        json_str = json_str.replace(''','\'')   # 中文单引号
+        json_str = json_str.replace(''','\'')   # 中文单引号
         
         # 3. 修复尾随逗号 (例如 "key": "value", })
         json_str = re.sub(r',\s*}', '}', json_str)
         json_str = re.sub(r',\s*]', ']', json_str)
         
         # 4. 修复 Python 风格的布尔值和 None
-        json_str = json_str.replace('True', 'true').replace('False', 'false').replace('None', 'null')
+        # 使用单词边界确保不会误替换
+        json_str = re.sub(r'\bTrue\b', 'true', json_str)
+        json_str = re.sub(r'\bFalse\b', 'false', json_str)
+        json_str = re.sub(r'\bNone\b', 'null', json_str)
         
         # 5. 尝试补全缺失的结尾大括号 (LLM 经常写到一半断掉)
         open_braces = json_str.count('{')
         close_braces = json_str.count('}')
         if open_braces > close_braces:
             json_str += '}' * (open_braces - close_braces)
-            
-        return json_str
+        
+        # 6. 修复字符串中的转义问题（确保引号正确转义）
+        # 这个比较复杂，暂时不处理，因为可能会破坏正常的内容
+        
+        return json_str.strip()
     
-    def _parse_text_response(
+    def _parse_text_response_via_regex(
         self, 
-        response_text: str, 
+        text: str, 
         code: str, 
         name: str
     ) -> AnalysisResult:
-        """从纯文本响应中尽可能提取分析信息"""
-        # 尝试识别关键词来判断情绪
-        sentiment_score = 50
-        trend = '震荡'
-        advice = '持有'
+        """
+        终极兜底方案：使用正则表达式强制提取关键信息
         
-        text_lower = response_text.lower()
+        当 JSON 彻底无法修复时，使用正则表达式提取：
+        - sentiment_score (评分)
+        - operation_advice (建议)
+        - trend_prediction (趋势)
+        - one_sentence (核心结论，通常在 core_conclusion 里)
         
-        # 简单的情绪识别
-        positive_keywords = ['看多', '买入', '上涨', '突破', '强势', '利好', '加仓', 'bullish', 'buy']
-        negative_keywords = ['看空', '卖出', '下跌', '跌破', '弱势', '利空', '减仓', 'bearish', 'sell']
+        确保邮件里能显示人话，而不是代码
+        """
+        import re
         
-        positive_count = sum(1 for kw in positive_keywords if kw in text_lower)
-        negative_count = sum(1 for kw in negative_keywords if kw in text_lower)
+        # 提取评分（支持中英文冒号）
+        score_match = re.search(r'"sentiment_score"\s*[:：]\s*(\d+)', text)
+        score = int(score_match.group(1)) if score_match else 50
         
-        if positive_count > negative_count + 1:
-            sentiment_score = 65
-            trend = '看多'
-            advice = '买入'
-        elif negative_count > positive_count + 1:
-            sentiment_score = 35
-            trend = '看空'
-            advice = '卖出'
+        # 提取操作建议（支持中英文冒号和引号）
+        advice_patterns = [
+            r'"operation_advice"\s*[:：]\s*"([^"]+)"',  # 标准格式
+            r'"operation_advice"\s*[:：]\s*"([^"]+)"',  # 中文引号
+            r'operation_advice["\s]*[:：]\s*["\']([^"\']+)["\']',  # 灵活匹配
+        ]
+        advice = "人工复核"
+        for pattern in advice_patterns:
+            match = re.search(pattern, text)
+            if match:
+                advice = match.group(1).strip()
+                break
         
-        # 截取前500字符作为摘要
-        summary = response_text[:500] if response_text else '无分析结果'
+        # 提取趋势预测
+        trend_patterns = [
+            r'"trend_prediction"\s*[:：]\s*"([^"]+)"',
+            r'"trend_prediction"\s*[:：]\s*"([^"]+)"',
+            r'trend_prediction["\s]*[:：]\s*["\']([^"\']+)["\']',
+        ]
+        trend = "解析异常"
+        for pattern in trend_patterns:
+            match = re.search(pattern, text)
+            if match:
+                trend = match.group(1).strip()
+                break
+        
+        # 提取核心结论 one_sentence（这是邮件显示的关键！）
+        # 支持多种格式：在 core_conclusion 中，或直接在顶层
+        one_sentence_patterns = [
+            r'"one_sentence"\s*[:：]\s*"([^"]+)"',  # 标准格式
+            r'"one_sentence"\s*[:：]\s*"([^"]+)"',  # 中文引号
+            r'one_sentence["\s]*[:：]\s*["\']([^"\']+)["\']',  # 灵活匹配
+            # 支持多行字符串（如果包含换行）
+            r'"one_sentence"\s*[:：]\s*"((?:[^"\\]|\\.)+)"',  # 支持转义字符
+        ]
+        one_sentence = None
+        for pattern in one_sentence_patterns:
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                one_sentence = match.group(1).strip()
+                # 清理可能的转义字符
+                one_sentence = one_sentence.replace('\\n', ' ').replace('\\"', '"')
+                break
+        
+        # 如果提取不到，给一个友好的默认文案
+        if not one_sentence or len(one_sentence) < 5:
+            one_sentence = f"AI 数据解析异常，但在原始文本中给出了 {score} 分评价，建议：{advice}。"
+        
+        # 构造兜底的 dashboard 数据结构
+        fallback_dashboard = {
+            "core_conclusion": {
+                "one_sentence": one_sentence,
+                "signal_type": "⚠️格式解析警告",
+                "time_sensitivity": "数据需复核"
+            }
+        }
         
         return AnalysisResult(
             code=code,
             name=name,
-            sentiment_score=sentiment_score,
+            sentiment_score=score,
             trend_prediction=trend,
             operation_advice=advice,
-            confidence_level='低',
-            analysis_summary=summary,
-            key_points='JSON解析失败，仅供参考',
+            confidence_level="低",
+            dashboard=fallback_dashboard,
+            analysis_summary=one_sentence,
+            key_points='JSON解析失败，已使用正则表达式提取关键信息',
             risk_warning='分析结果可能不准确，建议结合其他信息判断',
-            raw_response=response_text,
+            raw_response=text,
+            success=True,
+        )
+    
+    def _build_analysis_result(self, data: dict, code: str, name: str) -> AnalysisResult:
+        """
+        从解析成功的 JSON 数据构建 AnalysisResult 对象
+        
+        这是一个辅助方法，用于统一构建结果对象
+        """
+        # 提取 dashboard 数据
+        dashboard = data.get('dashboard', None)
+        
+        # 解析所有字段，使用默认值防止缺失
+        return AnalysisResult(
+            code=code,
+            name=name,
+            # 核心指标
+            sentiment_score=int(data.get('sentiment_score', 50)),
+            trend_prediction=data.get('trend_prediction', '震荡'),
+            operation_advice=data.get('operation_advice', '持有'),
+            confidence_level=data.get('confidence_level', '中'),
+            # 决策仪表盘
+            dashboard=dashboard,
+            # 走势分析
+            trend_analysis=data.get('trend_analysis', ''),
+            short_term_outlook=data.get('short_term_outlook', ''),
+            medium_term_outlook=data.get('medium_term_outlook', ''),
+            # 技术面
+            technical_analysis=data.get('technical_analysis', ''),
+            ma_analysis=data.get('ma_analysis', ''),
+            volume_analysis=data.get('volume_analysis', ''),
+            pattern_analysis=data.get('pattern_analysis', ''),
+            # 基本面
+            fundamental_analysis=data.get('fundamental_analysis', ''),
+            sector_position=data.get('sector_position', ''),
+            company_highlights=data.get('company_highlights', ''),
+            # 情绪面/消息面
+            news_summary=data.get('news_summary', ''),
+            market_sentiment=data.get('market_sentiment', ''),
+            hot_topics=data.get('hot_topics', ''),
+            # 综合
+            analysis_summary=data.get('analysis_summary', '分析完成'),
+            key_points=data.get('key_points', ''),
+            risk_warning=data.get('risk_warning', ''),
+            buy_reason=data.get('buy_reason', ''),
+            # 元数据
+            search_performed=data.get('search_performed', False),
+            data_sources=data.get('data_sources', '技术面数据'),
             success=True,
         )
     

@@ -639,9 +639,21 @@ class NotificationService:
             
             # ========== 核心结论 ==========
             core = dashboard.get('core_conclusion', {}) if dashboard else {}
-            one_sentence = core.get('one_sentence', result.analysis_summary)
-            time_sense = core.get('time_sensitivity', '本周内')
-            pos_advice = core.get('position_advice', {})
+            one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
+            
+            # 确保 one_sentence 是字符串类型，防止输出 JSON 对象
+            if isinstance(one_sentence, dict):
+                # 如果 one_sentence 是字典，尝试提取文本或使用默认值
+                one_sentence = one_sentence.get('text', one_sentence.get('content', result.analysis_summary))
+            elif not isinstance(one_sentence, str):
+                # 如果是其他类型，转换为字符串或使用默认值
+                one_sentence = str(one_sentence) if one_sentence else result.analysis_summary
+            # 如果 one_sentence 为空，使用默认值
+            if not one_sentence or one_sentence.strip() == '':
+                one_sentence = result.analysis_summary if result.analysis_summary else '暂无分析结论'
+            
+            time_sense = core.get('time_sensitivity', '本周内') if core else '本周内'
+            pos_advice = core.get('position_advice', {}) if core else {}
             
             report_lines.extend([
                 "### 📌 核心结论",
@@ -859,6 +871,18 @@ class NotificationService:
             
             # 核心决策（一句话）
             one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
+            
+            # 确保 one_sentence 是字符串类型，防止输出 JSON 对象
+            if isinstance(one_sentence, dict):
+                # 如果 one_sentence 是字典，尝试提取文本或使用默认值
+                one_sentence = one_sentence.get('text', one_sentence.get('content', result.analysis_summary))
+            elif not isinstance(one_sentence, str):
+                # 如果是其他类型，转换为字符串或使用默认值
+                one_sentence = str(one_sentence) if one_sentence else result.analysis_summary
+            # 如果 one_sentence 为空，使用默认值
+            if not one_sentence or one_sentence.strip() == '':
+                one_sentence = result.analysis_summary if result.analysis_summary else '暂无分析结论'
+            
             if one_sentence:
                 lines.append(f"📌 **{one_sentence[:80]}**")
                 lines.append("")
@@ -1044,6 +1068,18 @@ class NotificationService:
         
         # 核心决策（一句话）
         one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
+        
+        # 确保 one_sentence 是字符串类型，防止输出 JSON 对象
+        if isinstance(one_sentence, dict):
+            # 如果 one_sentence 是字典，尝试提取文本或使用默认值
+            one_sentence = one_sentence.get('text', one_sentence.get('content', result.analysis_summary))
+        elif not isinstance(one_sentence, str):
+            # 如果是其他类型，转换为字符串或使用默认值
+            one_sentence = str(one_sentence) if one_sentence else result.analysis_summary
+        # 如果 one_sentence 为空，使用默认值
+        if not one_sentence or one_sentence.strip() == '':
+            one_sentence = result.analysis_summary if result.analysis_summary else '暂无分析结论'
+        
         if one_sentence:
             lines.extend([
                 "### 📌 核心结论",
