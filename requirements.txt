@@ -45,3 +45,5 @@ discord.py>=2.0.0              # Discord 机器人开发库
 
 # Web Content Extraction
 newspaper3k>=0.2.8          # Article extraction
+
+lxml_html_clean>=0.4.3
