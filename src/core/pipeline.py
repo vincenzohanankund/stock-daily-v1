@@ -448,12 +448,24 @@ class StockAnalysisPipeline:
 
     def _resolve_query_source(self, query_source: Optional[str]) -> str:
         """
-        解析请求来源
+        解析请求来源。
+
+        优先级（从高到低）：
+        1. 显式传入的 query_source：调用方明确指定时优先使用，便于覆盖推断结果或兼容未来 source_message 来自非 bot 的场景
+        2. 存在 source_message 时推断为 "bot"：当前约定为机器人会话上下文
+        3. 存在 query_id 时推断为 "web"：Web 触发的请求会带上 query_id
+        4. 默认 "system"：定时任务或 CLI 等无上述上下文时
+
+        Args:
+            query_source: 调用方显式指定的来源，如 "bot" / "web" / "cli" / "system"
+
+        Returns:
+            归一化后的来源标识字符串，如 "bot" / "web" / "cli" / "system"
         """
-        if self.source_message:
-            return "bot"
         if query_source:
             return query_source
+        if self.source_message:
+            return "bot"
         if self.query_id:
             return "web"
         return "system"
