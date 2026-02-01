@@ -192,6 +192,17 @@ python main.py --stocks AAPL,TSLA,GOOGL
 python main.py --market-review
 ```
 
+### API Endpoints
+
+| Endpoint | Method | Description |
+|------|------|------|
+| `/` | GET | Configuration page |
+| `/health` | GET | Health check |
+| `/analysis?code=xxx` | GET | Trigger async analysis for a single stock |
+| `/analysis/history` | GET | Query analysis history records |
+| `/tasks` | GET | Query all task statuses |
+| `/task?id=xxx` | GET | Query a single task status |
+
 ---
 
 ## 📱 Supported Notification Channels
