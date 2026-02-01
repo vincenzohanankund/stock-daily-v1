@@ -465,37 +465,39 @@ class DatabaseManager:
                             existing.requester_message_id = query_context.get("requester_message_id") or existing.requester_message_id
                             existing.requester_query = query_context.get("requester_query") or existing.requester_query
                     else:
-                        record = NewsIntel(
-                            code=code,
-                            name=name,
-                            dimension=dimension,
-                            query=query,
-                            provider=response.provider,
-                            title=title,
-                            snippet=snippet,
-                            url=url_key,
-                            source=source,
-                            published_date=published_date,
-                            fetched_at=datetime.now(),
-                            query_id=(query_context or {}).get("query_id"),
-                            query_source=(query_context or {}).get("query_source"),
-                            requester_platform=(query_context or {}).get("requester_platform"),
-                            requester_user_id=(query_context or {}).get("requester_user_id"),
-                            requester_user_name=(query_context or {}).get("requester_user_name"),
-                            requester_chat_id=(query_context or {}).get("requester_chat_id"),
-                            requester_message_id=(query_context or {}).get("requester_message_id"),
-                            requester_query=(query_context or {}).get("requester_query"),
-                        )
-                        session.add(record)
-                        saved_count += 1
+                        try:
+                            with session.begin_nested():
+                                record = NewsIntel(
+                                    code=code,
+                                    name=name,
+                                    dimension=dimension,
+                                    query=query,
+                                    provider=response.provider,
+                                    title=title,
+                                    snippet=snippet,
+                                    url=url_key,
+                                    source=source,
+                                    published_date=published_date,
+                                    fetched_at=datetime.now(),
+                                    query_id=(query_context or {}).get("query_id"),
+                                    query_source=(query_context or {}).get("query_source"),
+                                    requester_platform=(query_context or {}).get("requester_platform"),
+                                    requester_user_id=(query_context or {}).get("requester_user_id"),
+                                    requester_user_name=(query_context or {}).get("requester_user_name"),
+                                    requester_chat_id=(query_context or {}).get("requester_chat_id"),
+                                    requester_message_id=(query_context or {}).get("requester_message_id"),
+                                    requester_query=(query_context or {}).get("requester_query"),
+                                )
+                                session.add(record)
+                                session.flush()
+                            saved_count += 1
+                        except IntegrityError:
+                            # 单条 URL 唯一约束冲突（如并发插入），仅跳过本条，保留本批其余成功项
+                            logger.debug("新闻情报重复（已跳过）: %s %s", code, url_key)
 
                 session.commit()
                 logger.info(f"保存新闻情报成功: {code}, 新增 {saved_count} 条")
 
-            except IntegrityError:
-                # URL 唯一约束导致的重复插入，忽略即可
-                session.rollback()
-                logger.warning(f"保存新闻情报发生重复（已忽略）: {code}")
             except Exception as e:
                 session.rollback()
                 logger.error(f"保存新闻情报失败: {e}")
