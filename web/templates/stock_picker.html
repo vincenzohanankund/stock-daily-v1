@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}选股助手 - Daily Stock Analysis{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="mb-8">
+    <h1 class="text-2xl font-bold text-white flex items-center mb-2">
+        <i class="fa-solid fa-filter mr-3 text-purple-500"></i>
+        选股助手
+    </h1>
+    <p class="text-slate-400">
+        基于多因子模型的智能选股工具，帮助发现潜在投资机会
+    </p>
+</div>
+
+<!-- Coming Soon Banner -->
+<div class="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-xl border border-purple-500/30 p-12 text-center">
+    <div class="inline-flex items-center justify-center p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl mb-6">
+        <i class="fa-solid fa-rocket text-purple-400 text-4xl"></i>
+    </div>
+    <h2 class="text-3xl font-bold text-white mb-4">即将推出</h2>
+    <p class="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
+        选股助手功能正在开发中，将提供基于技术指标、基本面数据和市场情绪的多维度选股筛选工具。
+    </p>
+    
+    <!-- Feature Preview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mt-12">
+        <div class="bg-geek-card rounded-lg border border-geek-border p-6 text-left">
+            <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
+                <i class="fa-solid fa-chart-line text-xl"></i>
+            </div>
+            <h3 class="font-bold text-white mb-2">技术指标筛选</h3>
+            <p class="text-sm text-slate-400">
+                基于均线排列、MACD、RSI、布林带等技术指标进行股票筛选
+            </p>
+        </div>
+        
+        <div class="bg-geek-card rounded-lg border border-geek-border p-6 text-left">
+            <div class="h-10 w-10 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 mb-4">
+                <i class="fa-solid fa-building text-xl"></i>
+            </div>
+            <h3 class="font-bold text-white mb-2">基本面分析</h3>
+            <p class="text-sm text-slate-400">
+                根据市盈率、市净率、ROE、营收增长等财务指标筛选优质标的
+            </p>
+        </div>
+        
+        <div class="bg-geek-card rounded-lg border border-geek-border p-6 text-left">
+            <div class="h-10 w-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400 mb-4">
+                <i class="fa-solid fa-brain text-xl"></i>
+            </div>
+            <h3 class="font-bold text-white mb-2">AI 智能推荐</h3>
+            <p class="text-sm text-slate-400">
+                结合市场情绪、资金流向和机器学习模型生成个性化推荐
+            </p>
+        </div>
+    </div>
+    
+    <!-- Notification Signup -->
+    <div class="mt-12 max-w-md mx-auto">
+        <p class="text-sm text-slate-500 mb-4">订阅更新通知，功能上线时第一时间知晓</p>
+        <div class="flex gap-2">
+            <input 
+                type="email" 
+                placeholder="输入您的邮箱"
+                disabled
+                class="flex-1 bg-slate-900 border border-geek-border rounded-lg px-4 py-3 text-white placeholder-slate-500 opacity-50 cursor-not-allowed"
+            >
+            <button 
+                disabled
+                class="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-6 py-3 transition-all opacity-50">
+                订阅
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Alternative Actions -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/stock-analysis" class="bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all flex items-center group">
+        <div class="h-14 w-14 rounded-xl bg-accent/10 flex items-center justify-center text-accent mr-4 group-hover:bg-accent/20 transition-colors">
+            <i class="fa-solid fa-magnifying-glass-chart text-2xl"></i>
+        </div>
+        <div>
+            <h3 class="font-bold text-white text-lg">个股分析</h3>
+            <p class="text-sm text-slate-400">分析特定股票的实时数据与趋势</p>
+        </div>
+        <i class="fa-solid fa-arrow-right ml-auto text-slate-600 group-hover:text-accent transition-colors"></i>
+    </a>
+    
+    <a href="/history" class="bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all flex items-center group">
+        <div class="h-14 w-14 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 mr-4 group-hover:bg-emerald-500/20 transition-colors">
+            <i class="fa-solid fa-clock-rotate-left text-2xl"></i>
+        </div>
+        <div>
+            <h3 class="font-bold text-white text-lg">历史报告</h3>
+            <p class="text-sm text-slate-400">查看过往的市场复盘与分析记录</p>
+        </div>
+        <i class="fa-solid fa-arrow-right ml-auto text-slate-600 group-hover:text-accent transition-colors"></i>
+    </a>
+</div>
+{% endblock %}

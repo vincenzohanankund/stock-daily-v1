@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Stock Analysis - 服务首页{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="text-center py-12 md:py-16">
+    <div class="inline-flex items-center justify-center p-3 bg-accent/10 border border-accent/30 rounded-2xl mb-6">
+        <i class="fa-solid fa-robot text-accent text-3xl"></i>
+    </div>
+    <h1 class="text-3xl md:text-5xl font-bold text-white mb-4">
+        智能量化分析平台
+    </h1>
+    <p class="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
+        基于 AI 的股票分析与决策支持系统，支持 A股、港股、美股多市场分析
+    </p>
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="/stock-analysis" class="px-8 py-3 bg-accent hover:bg-accent/80 text-white font-semibold rounded-lg transition-all flex items-center space-x-2 shadow-lg shadow-accent/20">
+            <i class="fa-solid fa-magnifying-glass-chart"></i>
+            <span>开始分析</span>
+        </a>
+        <a href="/history" class="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-all flex items-center space-x-2 border border-geek-border">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span>查看历史</span>
+        </a>
+    </div>
+</div>
+
+<!-- Feature Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+    <!-- Feature 1: 个股分析 -->
+    <a href="/stock-analysis" class="group bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+        <div class="flex items-center justify-between mb-4">
+            <div class="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-500/30 transition-colors">
+                <i class="fa-solid fa-magnifying-glass-chart text-xl"></i>
+            </div>
+            <i class="fa-solid fa-arrow-right text-slate-600 group-hover:text-accent transition-colors"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">个股分析</h3>
+        <p class="text-sm text-slate-400">
+            支持 A股(6位代码)、港股(HK+5位)、美股(字母代码)的实时分析与决策建议
+        </p>
+    </a>
+
+    <!-- Feature 2: 历史报告 -->
+    <a href="/history" class="group bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+        <div class="flex items-center justify-between mb-4">
+            <div class="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/30 transition-colors">
+                <i class="fa-solid fa-clock-rotate-left text-xl"></i>
+            </div>
+            <i class="fa-solid fa-arrow-right text-slate-600 group-hover:text-accent transition-colors"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">历史报告</h3>
+        <p class="text-sm text-slate-400">
+            查看过往的市场复盘与个股分析报告，支持按日期检索与回溯
+        </p>
+    </a>
+
+    <!-- Feature 3: 选股助手 -->
+    <a href="/stock-picker" class="group bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+        <div class="flex items-center justify-between mb-4">
+            <div class="h-12 w-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-500/30 transition-colors">
+                <i class="fa-solid fa-filter text-xl"></i>
+            </div>
+            <i class="fa-solid fa-arrow-right text-slate-600 group-hover:text-accent transition-colors"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">选股助手</h3>
+        <p class="text-sm text-slate-400">
+            基于多因子模型的智能选股工具，帮助发现潜在投资机会
+        </p>
+        <span class="inline-block mt-3 px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded">开发中</span>
+    </a>
+
+    <!-- Feature 4: API 接口 -->
+    <div class="group bg-geek-card rounded-xl border border-geek-border p-6 hover:border-accent transition-all duration-300" x-data="{ showApiModal: false }">
+        <div class="flex items-center justify-between mb-4">
+            <div class="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400 group-hover:bg-orange-500/30 transition-colors">
+                <i class="fa-solid fa-code text-xl"></i>
+            </div>
+            <button @click="showApiModal = true" class="text-slate-500 hover:text-accent transition-colors" title="查看任务">
+                <i class="fa-solid fa-list-ul"></i>
+            </button>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">API 接口</h3>
+        <p class="text-sm text-slate-400 mb-3">
+            提供 RESTful API 供外部系统集成与自动化调用
+        </p>
+        <div class="space-y-1 text-xs font-mono">
+            <code class="block bg-slate-900 px-2 py-1 rounded text-slate-400">GET /health</code>
+            <code class="block bg-slate-900 px-2 py-1 rounded text-slate-400">GET /analysis?code=xxx</code>
+            <code class="block bg-slate-900 px-2 py-1 rounded text-slate-400">GET /tasks</code>
+        </div>
+
+        <!-- Task Query Modal -->
+        <div x-show="showApiModal" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 overflow-y-auto"
+             style="display: none;">
+            <div class="flex items-center justify-center min-h-screen px-4">
+                <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="showApiModal = false"></div>
+                <div class="relative bg-geek-card rounded-xl border border-geek-border shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+                     x-data="taskModalData()"
+                     x-init="fetchTasks()">
+                    <div class="flex items-center justify-between p-6 border-b border-geek-border">
+                        <h3 class="text-xl font-bold text-white flex items-center">
+                            <i class="fa-solid fa-list-check mr-3 text-accent"></i>
+                            任务查询
+                        </h3>
+                        <button @click="showApiModal = false" class="text-slate-400 hover:text-white transition-colors">
+                            <i class="fa-solid fa-xmark text-xl"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="p-6 overflow-y-auto max-h-[60vh]">
+                        <!-- Search -->
+                        <div class="flex gap-4 mb-6">
+                            <div class="flex-1">
+                                <input 
+                                    type="text" 
+                                    x-model="searchCode"
+                                    placeholder="搜索股票代码..."
+                                    class="w-full bg-slate-900 border border-geek-border rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-accent font-mono"
+                                >
+                            </div>
+                            <select x-model="filterStatus" class="bg-slate-900 border border-geek-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-accent">
+                                <option value="">全部状态</option>
+                                <option value="running">分析中</option>
+                                <option value="completed">已完成</option>
+                                <option value="failed">失败</option>
+                            </select>
+                            <button @click="fetchTasks()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg transition-colors">
+                                <i class="fa-solid fa-rotate" :class="loading ? 'fa-spin' : ''"></i>
+                            </button>
+                        </div>
+
+                        <!-- Task List -->
+                        <div class="space-y-3">
+                            <template x-if="loading">
+                                <div class="text-center py-12 text-slate-400">
+                                    <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-4"></i>
+                                    <p>加载中...</p>
+                                </div>
+                            </template>
+                            <template x-if="!loading && filteredTasks.length === 0">
+                                <div class="text-center py-12 text-slate-400">
+                                    <i class="fa-solid fa-inbox text-3xl mb-4 opacity-50"></i>
+                                    <p>暂无匹配的任务</p>
+                                </div>
+                            </template>
+                            <template x-for="task in filteredTasks" :key="task.task_id">
+                                <div class="bg-slate-900/50 rounded-lg border border-geek-border p-4 hover:border-slate-500 transition-colors cursor-pointer"
+                                     @click="selectedTask = selectedTask === task.task_id ? null : task.task_id">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-4">
+                                            <div class="h-10 w-10 rounded-lg flex items-center justify-center"
+                                                 :class="{
+                                                     'bg-blue-500/20 text-blue-400': task.status === 'running',
+                                                     'bg-green-500/20 text-green-400': task.status === 'completed',
+                                                     'bg-red-500/20 text-red-400': task.status === 'failed',
+                                                     'bg-slate-700 text-slate-400': task.status === 'pending'
+                                                 }">
+                                                <i class="fa-solid" :class="{
+                                                    'fa-spinner fa-spin': task.status === 'running',
+                                                    'fa-check': task.status === 'completed',
+                                                    'fa-xmark': task.status === 'failed',
+                                                    'fa-clock': task.status === 'pending'
+                                                }"></i>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="font-mono font-bold text-white" x-text="task.code || task.task_id.split('_')[0]"></span>
+                                                    <span class="text-xs px-2 py-0.5 rounded" 
+                                                          :class="task.report_type === 'full' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'"
+                                                          x-text="task.report_type === 'full' ? '完整' : '精简'"></span>
+                                                </div>
+                                                <div class="text-xs text-slate-500 mt-1" x-text="formatTime(task.start_time)"></div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <template x-if="task.result && task.result.operation_advice">
+                                                <span class="px-2 py-1 text-xs rounded font-medium"
+                                                      :class="{
+                                                          'bg-green-500/20 text-green-400': task.result.operation_advice.includes('买'),
+                                                          'bg-red-500/20 text-red-400': task.result.operation_advice.includes('卖'),
+                                                          'bg-yellow-500/20 text-yellow-400': task.result.operation_advice.includes('持有'),
+                                                          'bg-slate-700 text-slate-300': !task.result.operation_advice.includes('买') && !task.result.operation_advice.includes('卖') && !task.result.operation_advice.includes('持有')
+                                                      }"
+                                                      x-text="task.result.operation_advice">
+                                                </span>
+                                            </template>
+                                            <i class="fa-solid fa-chevron-down text-slate-500 transition-transform" :class="selectedTask === task.task_id ? 'rotate-180' : ''"></i>
+                                        </div>
+                                    </div>
+                                    <!-- Expanded Details -->
+                                    <div x-show="selectedTask === task.task_id" x-collapse class="mt-4 pt-4 border-t border-geek-border">
+                                        <div class="grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span class="text-slate-500">任务ID:</span>
+                                                <span class="text-slate-300 font-mono ml-2" x-text="task.task_id"></span>
+                                            </div>
+                                            <div>
+                                                <span class="text-slate-500">状态:</span>
+                                                <span class="ml-2" :class="{
+                                                    'text-blue-400': task.status === 'running',
+                                                    'text-green-400': task.status === 'completed',
+                                                    'text-red-400': task.status === 'failed'
+                                                }" x-text="task.status === 'running' ? '分析中' : task.status === 'completed' ? '已完成' : task.status === 'failed' ? '失败' : '等待中'"></span>
+                                            </div>
+                                            <div x-show="task.result && task.result.sentiment_score">
+                                                <span class="text-slate-500">情绪评分:</span>
+                                                <span class="text-white ml-2" x-text="task.result.sentiment_score + '分'"></span>
+                                            </div>
+                                            <div x-show="task.result && task.result.trend_prediction">
+                                                <span class="text-slate-500">趋势预测:</span>
+                                                <span class="text-white ml-2" x-text="task.result.trend_prediction"></span>
+                                            </div>
+                                        </div>
+                                        <div x-show="task.result && task.result.analysis_summary" class="mt-3 p-3 bg-slate-950 rounded-lg">
+                                            <div class="text-xs text-slate-500 mb-1">分析摘要</div>
+                                            <div class="text-sm text-slate-300" x-text="task.result.analysis_summary"></div>
+                                        </div>
+                                        <div x-show="task.error" class="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+                                            <div class="text-xs text-red-400 mb-1">错误信息</div>
+                                            <div class="text-sm text-red-300" x-text="task.error"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 border-t border-geek-border bg-slate-800/30 flex justify-between items-center">
+                        <span class="text-sm text-slate-400" x-text="'共 ' + filteredTasks.length + ' 个任务'"></span>
+                        <button @click="showApiModal = false" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        function taskModalData() {
+            return {
+                tasks: [],
+                loading: true,
+                searchCode: '',
+                filterStatus: '',
+                selectedTask: null,
+                
+                get filteredTasks() {
+                    return this.tasks.filter(task => {
+                        const code = (task.code || task.task_id.split('_')[0]).toUpperCase();
+                        const matchCode = code.includes(this.searchCode.toUpperCase());
+                        const matchStatus = !this.filterStatus || task.status === this.filterStatus;
+                        return matchCode && matchStatus;
+                    });
+                },
+                
+                async fetchTasks() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/tasks?limit=50');
+                        const data = await response.json();
+                        if (data.success && data.tasks) {
+                            this.tasks = data.tasks;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch tasks:', e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                formatTime(isoString) {
+                    if (!isoString) return '-';
+                    const date = new Date(isoString);
+                    return date.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                }
+            };
+        }
+        </script>
+    </div>
+</div>
+
+<!-- Quick Stats Section -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6" x-data="{ 
+    stats: { 
+        totalAnalyzed: 0, 
+        todayTasks: 0, 
+        successRate: 0 
+    },
+    async fetchStats() {
+        try {
+            const response = await fetch('/tasks?limit=100');
+            const data = await response.json();
+            if (data.success && data.tasks) {
+                this.stats.totalAnalyzed = data.tasks.length;
+                const today = new Date().toISOString().split('T')[0];
+                this.stats.todayTasks = data.tasks.filter(t => t.start_time && t.start_time.startsWith(today)).length;
+                const completed = data.tasks.filter(t => t.status === 'completed').length;
+                this.stats.successRate = data.tasks.length > 0 ? Math.round((completed / data.tasks.length) * 100) : 0;
+            }
+        } catch (e) {
+            console.error('Failed to fetch stats:', e);
+        }
+    }
+}" x-init="fetchStats()">
+    <div class="bg-geek-card rounded-xl border border-geek-border p-6 flex items-center space-x-4">
+        <div class="h-14 w-14 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
+            <i class="fa-solid fa-chart-pie text-2xl"></i>
+        </div>
+        <div>
+            <p class="text-slate-400 text-sm">总分析次数</p>
+            <p class="text-2xl font-bold text-white font-mono" x-text="stats.totalAnalyzed">-</p>
+        </div>
+    </div>
+    <div class="bg-geek-card rounded-xl border border-geek-border p-6 flex items-center space-x-4">
+        <div class="h-14 w-14 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400">
+            <i class="fa-solid fa-calendar-day text-2xl"></i>
+        </div>
+        <div>
+            <p class="text-slate-400 text-sm">今日任务</p>
+            <p class="text-2xl font-bold text-white font-mono" x-text="stats.todayTasks">-</p>
+        </div>
+    </div>
+    <div class="bg-geek-card rounded-xl border border-geek-border p-6 flex items-center space-x-4">
+        <div class="h-14 w-14 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+            <i class="fa-solid fa-check-circle text-2xl"></i>
+        </div>
+        <div>
+            <p class="text-slate-400 text-sm">成功率</p>
+            <p class="text-2xl font-bold text-white font-mono" x-text="stats.successRate + '%'">-</p>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Tasks Section -->
+<div class="mt-12" x-data="{
+    tasks: [],
+    loading: true,
+    async fetchTasks() {
+        try {
+            const response = await fetch('/tasks?limit=5');
+            const data = await response.json();
+            if (data.success && data.tasks) {
+                this.tasks = data.tasks.slice(0, 5);
+            }
+        } catch (e) {
+            console.error('Failed to fetch tasks:', e);
+        } finally {
+            this.loading = false;
+        }
+    },
+    formatTime(isoString) {
+        if (!isoString) return '-';
+        const date = new Date(isoString);
+        return date.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+    getStatusColor(status) {
+        const colors = { running: 'text-blue-400', completed: 'text-green-400', failed: 'text-red-400', pending: 'text-slate-400' };
+        return colors[status] || 'text-slate-400';
+    },
+    getStatusIcon(status) {
+        const icons = { running: 'fa-spinner fa-spin', completed: 'fa-check', failed: 'fa-xmark', pending: 'fa-clock' };
+        return icons[status] || 'fa-clock';
+    }
+}" x-init="fetchTasks()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white flex items-center">
+            <i class="fa-solid fa-list-check mr-3 text-accent"></i>
+            最近分析任务
+        </h2>
+        <a href="/stock-analysis" class="text-sm text-accent hover:text-accent/80 flex items-center">
+            查看全部 <i class="fa-solid fa-arrow-right ml-1"></i>
+        </a>
+    </div>
+
+    <div class="bg-geek-card rounded-xl border border-geek-border overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-800/50 border-b border-geek-border">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">股票代码</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">状态</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">报告类型</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">开始时间</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">操作建议</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-geek-border">
+                    <template x-if="loading">
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-slate-400">
+                                <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> 加载中...
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && tasks.length === 0">
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-slate-400">
+                                <i class="fa-solid fa-inbox mr-2"></i> 暂无分析任务
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-for="task in tasks" :key="task.task_id">
+                        <tr class="hover:bg-slate-800/30 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="font-mono font-medium text-white" x-text="task.code || task.task_id.split('_')[0]"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="flex items-center" :class="getStatusColor(task.status)">
+                                    <i class="fa-solid mr-2" :class="getStatusIcon(task.status)"></i>
+                                    <span x-text="task.status === 'running' ? '分析中' : task.status === 'completed' ? '已完成' : task.status === 'failed' ? '失败' : '等待中'"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm text-slate-300" x-text="task.report_type === 'full' ? '完整报告' : '精简报告'"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-400" x-text="formatTime(task.start_time)"></td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <template x-if="task.result && task.result.operation_advice">
+                                    <span class="px-2 py-1 text-xs rounded font-medium"
+                                          :class="{
+                                              'bg-green-500/20 text-green-400': task.result.operation_advice.includes('买'),
+                                              'bg-red-500/20 text-red-400': task.result.operation_advice.includes('卖'),
+                                              'bg-yellow-500/20 text-yellow-400': task.result.operation_advice.includes('持有'),
+                                              'bg-slate-700 text-slate-300': !task.result.operation_advice.includes('买') && !task.result.operation_advice.includes('卖') && !task.result.operation_advice.includes('持有')
+                                          }"
+                                          x-text="task.result.operation_advice">
+                                    </span>
+                                </template>
+                                <template x-if="!task.result || !task.result.operation_advice">
+                                    <span class="text-slate-500">-</span>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

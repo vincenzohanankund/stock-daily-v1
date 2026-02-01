@@ -288,8 +288,26 @@ def create_default_router() -> Router:
     router.register(
         "/", "GET",
         lambda q: page_handler.handle_index(),
-        "配置首页"
+        "服务首页"
     )
+    
+    router.register(
+        "/stock-analysis", "GET",
+        lambda q: page_handler.handle_stock_analysis(),
+        "个股分析"
+    )
+    
+    router.register(
+        "/history", "GET",
+        lambda q: page_handler.handle_history(),
+        "历史报告"
+    )
+    
+    # router.register(
+    #     "/stock-picker", "GET",
+    #     lambda q: page_handler.handle_stock_picker(),
+    #     "选股助手"
+    # )
     
     router.register(
         "/update", "POST",
@@ -320,6 +338,19 @@ def create_default_router() -> Router:
         "/task", "GET",
         lambda q: api_handler.handle_task_status(q),
         "查询任务状态"
+    )
+    
+    # === 历史报告 API 路由 ===
+    router.register(
+        "/api/history/dates", "GET",
+        lambda q: api_handler.handle_history_dates(q),
+        "获取可用的历史报告日期列表"
+    )
+    
+    router.register(
+        "/api/history/report", "GET",
+        lambda q: api_handler.handle_history_report(q),
+        "获取指定日期的历史报告"
     )
     
     # === Bot Webhook 路由 ===

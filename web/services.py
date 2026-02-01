@@ -314,6 +314,306 @@ class AnalysisService:
 
 
 # ============================================================
+# 历史报告服务
+# ============================================================
+
+import os
+import re
+import json
+from pathlib import Path
+from datetime import datetime, date
+from typing import List, Dict, Any, Optional, Tuple
+
+
+class HistoryReportService:
+    """
+    历史报告服务
+    
+    负责：
+    1. 从 reports 目录读取已生成的报告文件
+    2. 解析报告内容，提取结构化数据
+    3. 提供按日期查询报告接口
+    """
+    
+    def __init__(self, reports_dir: Optional[str] = None):
+        """
+        初始化历史报告服务
+        
+        Args:
+            reports_dir: 报告目录路径（默认项目根目录下的 reports）
+        """
+        if reports_dir:
+            self.reports_dir = Path(reports_dir)
+        else:
+            # 默认使用项目根目录下的 reports
+            self.reports_dir = Path(__file__).parent.parent / 'reports'
+    
+    def get_available_dates(self) -> List[str]:
+        """
+        获取所有可用的报告日期列表
+        
+        Returns:
+            日期字符串列表（格式：YYYY-MM-DD），按日期降序排列
+        """
+        dates = set()
+        
+        if not self.reports_dir.exists():
+            return []
+        
+        # 匹配 report_YYYYMMDD.md 和 market_review_YYYYMMDD.md 文件
+        report_pattern = re.compile(r'report_(\d{8})\.md')
+        market_pattern = re.compile(r'market_review_(\d{8})\.md')
+        
+        for file in self.reports_dir.iterdir():
+            if file.is_file():
+                # 检查个股报告
+                match = report_pattern.match(file.name)
+                if match:
+                    date_str = match.group(1)
+                    formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                    dates.add(formatted_date)
+                    continue
+                
+                # 检查大盘复盘报告
+                match = market_pattern.match(file.name)
+                if match:
+                    date_str = match.group(1)
+                    formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                    dates.add(formatted_date)
+        
+        # 按日期降序排列
+        return sorted(list(dates), reverse=True)
+    
+    def get_report_by_date(self, target_date: str) -> Optional[Dict[str, Any]]:
+        """
+        获取指定日期的完整报告数据
+        
+        Args:
+            target_date: 目标日期（格式：YYYY-MM-DD）
+            
+        Returns:
+            报告数据字典，包含 marketReview 和 decisions
+        """
+        # 转换日期格式
+        date_obj = datetime.strptime(target_date, '%Y-%m-%d')
+        date_str_compact = date_obj.strftime('%Y%m%d')
+        
+        # 构建文件路径
+        report_file = self.reports_dir / f'report_{date_str_compact}.md'
+        market_file = self.reports_dir / f'market_review_{date_str_compact}.md'
+        
+        result = {
+            'date': target_date,
+            'marketReview': None,
+            'decisions': []
+        }
+        
+        # 读取大盘复盘
+        if market_file.exists():
+            result['marketReview'] = self._parse_market_review(market_file.read_text(encoding='utf-8'))
+        
+        # 读取个股决策报告
+        if report_file.exists():
+            result['decisions'] = self._parse_stock_report(report_file.read_text(encoding='utf-8'))
+        
+        # 如果没有任何报告数据，返回 None
+        if result['marketReview'] is None and not result['decisions']:
+            return None
+        
+        return result
+    
+    def _parse_market_review(self, content: str) -> Optional[Dict[str, str]]:
+        """
+        解析大盘复盘报告内容
+        
+        Args:
+            content: Markdown 格式的报告内容
+            
+        Returns:
+            解析后的市场复盘数据
+        """
+        sections = {
+            'summary': '',
+            'indexComment': '',
+            'capitalFlow': '',
+            'hotTopics': '',
+            'outlook': '',
+            'riskWarning': ''
+        }
+        
+        # 使用正则表达式提取各部分内容
+        # 市场总结 - 一、市场总结
+        summary_match = re.search(r'### 一、市场总结\s*\n([^#]+?)(?=###|$)', content)
+        if summary_match:
+            sections['summary'] = summary_match.group(1).strip()
+        
+        # 指数点评 - 二、指数点评
+        index_match = re.search(r'### 二、指数点评\s*\n([^#]+?)(?=###|$)', content)
+        if index_match:
+            sections['indexComment'] = index_match.group(1).strip()
+        
+        # 资金动向 - 三、资金动向
+        capital_match = re.search(r'### 三、资金动向\s*\n([^#]+?)(?=###|$)', content)
+        if capital_match:
+            sections['capitalFlow'] = capital_match.group(1).strip()
+        
+        # 热点解读 - 四、热点解读
+        hot_match = re.search(r'### 四、热点解读\s*\n([^#]+?)(?=###|$)', content)
+        if hot_match:
+            sections['hotTopics'] = hot_match.group(1).strip()
+        
+        # 后市展望 - 五、后市展望
+        outlook_match = re.search(r'### 五、后市展望\s*\n([^#]+?)(?=###|$)', content)
+        if outlook_match:
+            sections['outlook'] = outlook_match.group(1).strip()
+        
+        # 风险提示 - 六、风险提示
+        risk_match = re.search(r'### 六、风险提示\s*\n([^#]+?)(?=###|$)', content)
+        if risk_match:
+            sections['riskWarning'] = risk_match.group(1).strip()
+        
+        return sections if any(sections.values()) else None
+    
+    def _parse_stock_report(self, content: str) -> List[Dict[str, Any]]:
+        """
+        解析个股分析报告内容
+        
+        Args:
+            content: Markdown 格式的报告内容
+            
+        Returns:
+            个股决策列表
+        """
+        decisions = []
+        
+        # 提取报告摘要中的统计信息
+        summary_match = re.search(r'> 共分析 \*\*(\d+)\*\* 只.*🟢买入:(\d+).*🟡观望:(\d+).*🔴卖出:(\d+)', content)
+        
+        # 使用finditer找到所有股票部分
+        # 模式：## [emoji] 股票名称 (代码)
+        # 注意：股票名称中可能包含空格，代码在括号中
+        # 匹配到行尾，使用多行模式
+        stock_pattern = r'^##\s+([💚⚪🔴])\s+(.+)$'
+        
+        matches = list(re.finditer(stock_pattern, content, re.MULTILINE))
+        
+        for i, match in enumerate(matches):
+            emoji = match.group(1)
+            header_line = match.group(2).strip()
+            
+            # 提取股票名称和代码
+            # header_line 格式: "股票名称 (代码)" 或 "股票名称(代码)"
+            # 从右往左找最后一个括号，避免股票名称中有括号
+            if '(' in header_line and ')' in header_line:
+                # 找到最后一个 '(' 和对应的 ')'
+                code_start = header_line.rfind('(')
+                code_end = header_line.rfind(')')
+                if code_start < code_end:
+                    name = header_line[:code_start].strip()
+                    code = header_line[code_start + 1:code_end].strip()
+                else:
+                    continue
+            else:
+                continue
+            
+            # 获取该股票的内容（从当前匹配位置到下一个匹配位置或文件结束）
+            start_pos = match.end()
+            if i + 1 < len(matches):
+                section_content = content[start_pos:matches[i + 1].start()]
+            else:
+                section_content = content[start_pos:]
+            
+            decision = self._parse_single_stock_content(name, code, emoji, section_content)
+            if decision:
+                decisions.append(decision)
+        
+        return decisions
+    
+    def _parse_single_stock_content(self, name: str, code: str, signal_emoji: str, section: str) -> Optional[Dict[str, Any]]:
+        """
+        解析单个股票的分析内容
+        
+        Args:
+            name: 股票名称
+            code: 股票代码
+            signal_emoji: 信号emoji（💚买入/⚪观望/🔴卖出）
+            section: 单个股票的分析内容
+            
+        Returns:
+            解析后的股票决策数据
+        """
+        
+        # 根据 emoji 判断信号类型
+        signal_map = {
+            '💚': 'buy',
+            '⚪': 'watch',
+            '🔴': 'sell'
+        }
+        signal = signal_map.get(signal_emoji, 'watch')
+        
+        # 提取评分
+        score_match = re.search(r'评分[:\s]*(\d+)', section)
+        score = int(score_match.group(1)) if score_match else 50
+        
+        # 提取当前价
+        price_match = re.search(r'当前价\s*\|\s*([\d.]+)', section)
+        price = float(price_match.group(1)) if price_match else 0.0
+        
+        # 提取乖离率
+        bias_match = re.search(r'乖离率\([^)]+\)\s*\|\s*([+-]?[\d.]+)%', section)
+        bias = float(bias_match.group(1)) if bias_match else 0.0
+        
+        # 提取趋势强度
+        trend_match = re.search(r'趋势强度[:\s]*(\d+)', section)
+        trend = int(trend_match.group(1)) if trend_match else 50
+        
+        # 提取决策指令（一句话决策）
+        decision_match = re.search(r'> \*\*一句话决策\*\*[:：]\s*([^\n]+)', section)
+        if not decision_match:
+            decision_match = re.search(r'一句话决策[:\s]*([^\n]+)', section)
+        decision = decision_match.group(1).strip() if decision_match else ''
+        
+        # 提取基本面要点
+        fundamentals = []
+        # 从重要信息速览中提取
+        sentiment_match = re.search(r'\*\*💭 舆情情绪\*\*[:：]\s*([^\n]+)', section)
+        if sentiment_match:
+            fundamentals.append(f"舆情: {sentiment_match.group(1).strip()}")
+        
+        expectation_match = re.search(r'\*\*📊 业绩预期\*\*[:：]\s*([^\n]+)', section)
+        if expectation_match:
+            fundamentals.append(f"业绩: {expectation_match.group(1).strip()}")
+        
+        # 提取最新动态
+        news_match = re.search(r'\*\*📢 最新动态\*\*[:：]\s*([^\n]+)', section)
+        if news_match:
+            fundamentals.append(f"动态: {news_match.group(1).strip()}")
+        
+        # 如果没有提取到基本面信息，使用默认信息
+        if not fundamentals:
+            fundamentals = ['暂无详细基本面数据']
+        
+        # 提取操作建议（空仓者建议）
+        suggestion_match = re.search(r'\| 🆕 \*\*空仓者\*\* \|\s*([^\|]+?)\s*\|', section)
+        if not suggestion_match:
+            suggestion_match = re.search(r'空仓者.*建议[:：]\s*([^\n]+)', section)
+        suggestion = suggestion_match.group(1).strip() if suggestion_match else '建议观望，等待机会。'
+        
+        return {
+            'code': code,
+            'name': name,
+            'signal': signal,
+            'score': score,
+            'price': price,
+            'bias': bias,
+            'trend': trend,
+            'decision': decision,
+            'fundamentals': fundamentals,
+            'suggestion': suggestion
+        }
+
+
+# ============================================================
 # 便捷函数
 # ============================================================
 
@@ -325,3 +625,8 @@ def get_config_service() -> ConfigService:
 def get_analysis_service() -> AnalysisService:
     """获取分析服务单例"""
     return AnalysisService.get_instance()
+
+
+def get_history_report_service() -> HistoryReportService:
+    """获取历史报告服务实例"""
+    return HistoryReportService()

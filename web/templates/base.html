@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark" x-data="{ currentPage: '{{ page_name }}' }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Daily Stock Analysis{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'geek-bg': '#0f172a',
+                        'geek-card': '#1e293b',
+                        'geek-border': '#334155',
+                        'signal-buy': '#10b981',
+                        'signal-watch': '#94a3b8',
+                        'signal-sell': '#f43f5e',
+                        'accent': '#6366f1',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #020617;
+            color: #cbd5e1;
+            min-height: 100vh;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .nav-link {
+            @apply flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200;
+        }
+        .nav-link:hover {
+            @apply bg-slate-800 text-white;
+        }
+        .nav-link.active {
+            @apply bg-accent/20 text-accent border border-accent/50;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="antialiased">
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-geek-border shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-accent/10 border border-accent/50 p-2 rounded-lg">
+                        <i class="fa-solid fa-chart-line text-accent text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-white text-lg tracking-wide">Daily Stock Analysis</h1>
+                        <p class="text-[10px] text-slate-400 font-mono">每日股票分析系统</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="hidden md:flex items-center space-x-10">
+                    <a href="/" 
+                       :class="currentPage === 'index' ? 'active' : ''"
+                       class="nav-link">
+                        <i class="fa-solid fa-house"></i>
+                        <span>首页</span>
+                    </a>
+                    <a href="/stock-analysis" 
+                       :class="currentPage === 'stock_analysis' ? 'active' : ''"
+                       class="nav-link">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                        <span>个股分析</span>
+                    </a>
+                    <a href="/history" 
+                       :class="currentPage === 'history' ? 'active' : ''"
+                       class="nav-link">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>历史报告</span>
+                    </a>
+                    <!-- <a href="/stock-picker"
+                       :class="currentPage === 'stock_picker' ? 'active' : ''"
+                       class="nav-link">
+                        <i class="fa-solid fa-filter"></i>
+                        <span>选股助手</span>
+                    </a> -->
+                </nav>
+
+                <!-- Right Side -->
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 text-xs text-slate-500 font-mono">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span class="hidden sm:inline text-green-400">ONLINE</span>
+                    </div>
+                    <div class="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Navigation -->
+        <div class="md:hidden border-t border-geek-border">
+            <div class="max-w-7xl mx-auto px-4 py-2 flex justify-around">
+                <a href="/" class="flex flex-col items-center p-2 text-xs" :class="currentPage === 'index' ? 'text-accent' : 'text-slate-400'">
+                    <i class="fa-solid fa-house mb-1"></i>
+                    <span>首页</span>
+                </a>
+                <a href="/stock-analysis" class="flex flex-col items-center p-2 text-xs" :class="currentPage === 'stock_analysis' ? 'text-accent' : 'text-slate-400'">
+                    <i class="fa-solid fa-magnifying-glass-chart mb-1"></i>
+                    <span>分析</span>
+                </a>
+                <a href="/history" class="flex flex-col items-center p-2 text-xs" :class="currentPage === 'history' ? 'text-accent' : 'text-slate-400'">
+                    <i class="fa-solid fa-clock-rotate-left mb-1"></i>
+                    <span>历史</span>
+                </a>
+                <!-- <a href="/stock-picker" class="flex flex-col items-center p-2 text-xs" :class="currentPage === 'stock_picker' ? 'text-accent' : 'text-slate-400'">
+                    <i class="fa-solid fa-filter mb-1"></i>
+                    <span>选股</span>
+                </a> -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-geek-border mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row items-center justify-between text-xs text-slate-500">
+                <p>Daily Stock Analysis &copy; 2026 - 每日股票分析系统</p>
+                <div class="flex items-center space-x-4 mt-2 md:mt-0">
+                    <span>API: <code class="bg-slate-800 px-1 py-0.5 rounded">/health</code></span>
+                    <span><code class="bg-slate-800 px-1 py-0.5 rounded">/analysis</code></span>
+                    <span><code class="bg-slate-800 px-1 py-0.5 rounded">/tasks</code></span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

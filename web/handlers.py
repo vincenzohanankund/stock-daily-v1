@@ -23,8 +23,14 @@ from http import HTTPStatus
 from datetime import datetime
 from typing import Dict, Any, TYPE_CHECKING
 
-from web.services import get_config_service, get_analysis_service
-from web.templates import render_config_page
+from web.services import get_config_service, get_analysis_service, get_history_report_service
+from web.templates import (
+    render_config_page,
+    render_index_page,
+    render_stock_analysis_page,
+    render_history_page,
+    render_stock_picker_page
+)
 from src.enums import ReportType
 
 if TYPE_CHECKING:
@@ -104,7 +110,24 @@ class PageHandler:
         """处理首页请求 GET /"""
         stock_list = self.config_service.get_stock_list()
         env_filename = self.config_service.get_env_filename()
-        body = render_config_page(stock_list, env_filename)
+        body = render_index_page(stock_list, env_filename)
+        return HtmlResponse(body)
+    
+    def handle_stock_analysis(self) -> Response:
+        """处理个股分析页面请求 GET /stock-analysis"""
+        stock_list = self.config_service.get_stock_list()
+        env_filename = self.config_service.get_env_filename()
+        body = render_stock_analysis_page(stock_list, env_filename)
+        return HtmlResponse(body)
+    
+    def handle_history(self) -> Response:
+        """处理历史报告页面请求 GET /history"""
+        body = render_history_page()
+        return HtmlResponse(body)
+    
+    def handle_stock_picker(self) -> Response:
+        """处理选股助手页面请求 GET /stock-picker"""
+        body = render_stock_picker_page()
         return HtmlResponse(body)
     
     def handle_update(self, form_data: Dict[str, list]) -> Response:
@@ -117,7 +140,7 @@ class PageHandler:
         stock_list = form_data.get("stock_list", [""])[0]
         normalized = self.config_service.set_stock_list(stock_list)
         env_filename = self.config_service.get_env_filename()
-        body = render_config_page(normalized, env_filename, message="已保存")
+        body = render_stock_analysis_page(normalized, env_filename, message="已保存")
         return HtmlResponse(body)
 
 
@@ -247,6 +270,80 @@ class ApiHandler:
             )
         
         return JsonResponse({"success": True, "task": task})
+    
+    def handle_history_dates(self, query: Dict[str, list]) -> Response:
+        """
+        获取可用的历史报告日期列表 GET /api/history/dates
+        
+        Returns:
+            {
+                "success": true,
+                "dates": ["2026-01-31", "2026-01-30", ...]
+            }
+        """
+        try:
+            history_service = get_history_report_service()
+            dates = history_service.get_available_dates()
+            return JsonResponse({"success": True, "dates": dates})
+        except Exception as e:
+            logger.error(f"[ApiHandler] 获取历史日期失败: {e}")
+            return JsonResponse(
+                {"success": False, "error": f"获取历史日期失败: {str(e)}"},
+                status=HTTPStatus.INTERNAL_SERVER_ERROR
+            )
+    
+    def handle_history_report(self, query: Dict[str, list]) -> Response:
+        """
+        获取指定日期的历史报告 GET /api/history/report?date=2026-01-31
+        
+        Args:
+            query: URL 查询参数，包含 date (格式: YYYY-MM-DD)
+            
+        Returns:
+            {
+                "success": true,
+                "data": {
+                    "date": "2026-01-31",
+                    "marketReview": {...},
+                    "decisions": [...]
+                }
+            }
+        """
+        date_list = query.get("date", [])
+        if not date_list or not date_list[0].strip():
+            return JsonResponse(
+                {"success": False, "error": "缺少必填参数: date (日期，格式: YYYY-MM-DD)"},
+                status=HTTPStatus.BAD_REQUEST
+            )
+        
+        target_date = date_list[0].strip()
+        
+        # 验证日期格式
+        try:
+            datetime.strptime(target_date, '%Y-%m-%d')
+        except ValueError:
+            return JsonResponse(
+                {"success": False, "error": "日期格式无效，请使用 YYYY-MM-DD 格式"},
+                status=HTTPStatus.BAD_REQUEST
+            )
+        
+        try:
+            history_service = get_history_report_service()
+            report_data = history_service.get_report_by_date(target_date)
+            
+            if report_data is None:
+                return JsonResponse(
+                    {"success": False, "error": f"未找到 {target_date} 的报告数据"},
+                    status=HTTPStatus.NOT_FOUND
+                )
+            
+            return JsonResponse({"success": True, "data": report_data})
+        except Exception as e:
+            logger.error(f"[ApiHandler] 获取历史报告失败: {e}")
+            return JsonResponse(
+                {"success": False, "error": f"获取历史报告失败: {str(e)}"},
+                status=HTTPStatus.INTERNAL_SERVER_ERROR
+            )
 
 
 # ============================================================
