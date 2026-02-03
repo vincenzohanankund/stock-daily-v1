@@ -1,30 +1,47 @@
-# 忽略 Python 缓存
-__pycache__/
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
 *.py[cod]
 *$py.class
 *.so
-
-# 忽略虚拟环境
+.Python
 venv/
-.venv/
 env/
-.env.local
+ENV/
 
-# 忽略 IDE
-.idea/
-.vscode/
+# IDE
+.idea
+.vscode
 *.swp
 *.swo
 
-# 忽略数据文件（可选，如果想持久化就注释掉）
-# data/
-# logs/
-# reports/
+# 日志和数据（构建时不需要）
+logs/
+*.log
+data/*.db
+data/*.db-journal
 
-# 忽略测试文件
-test_*.py
-*_test.py
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
 
-# 忽略文档
+# 文档和脚本
 *.md
-!README.md
+*.sh
+sources/
+docs/
+
+# 测试
+tests/
+test*.py
+
+# 临时文件
+*.tmp
+*.bak
+.DS_Store
+update.log
