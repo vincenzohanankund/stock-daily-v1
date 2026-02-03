@@ -153,7 +153,7 @@ class Scheduler:
 def run_with_schedule(
     task: Callable,
     schedule_time: str = "18:00",
-    run_immediately: bool = True
+    run_immediately: bool = False
 ):
     """
     便捷函数：使用定时调度运行任务
@@ -181,4 +181,4 @@ if __name__ == "__main__":
         print("任务完成!")
     
     print("启动测试调度器（按 Ctrl+C 退出）")
-    run_with_schedule(test_task, schedule_time="23:59", run_immediately=True)
+    run_with_schedule(test_task, schedule_time="23:59", run_immediately=False)
