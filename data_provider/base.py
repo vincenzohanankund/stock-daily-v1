@@ -31,7 +31,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from daily_stock_analysis.data_provider.start_date import get_start_date
+from .start_date import get_start_date
 
 # 配置日志
 logger = logging.getLogger(__name__)
