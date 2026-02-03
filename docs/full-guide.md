@@ -168,7 +168,7 @@ daily_stock_analysis/
 | `PUSHOVER_USER_KEY` | Pushover 用户 Key | 可选 |
 | `PUSHOVER_API_TOKEN` | Pushover API Token | 可选 |
 | `PUSHPLUS_TOKEN` | PushPlus Token（国内推送服务） | 可选 |
-| `SERVERCHAN3_SENDKEY` | Server酱³ Sendkey | 可选* |
+| `SERVERCHAN3_SENDKEY` | Server酱³ Sendkey | 可选 |
 
 #### 飞书云文档配置（可选，解决消息截断问题）
 
