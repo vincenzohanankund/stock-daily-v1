@@ -30,6 +30,8 @@ from tenacity import (
     retry_if_exception_type,
 )
 
+from daily_stock_analysis.data_provider.start_date import get_start_date
+
 # 配置日志
 logger = logging.getLogger(__name__)
 
@@ -125,10 +127,7 @@ class BaseFetcher(ABC):
             end_date = datetime.now().strftime('%Y-%m-%d')
         
         if start_date is None:
-            # 默认获取最近 30 个交易日（按日历日估算，多取一些）
-            from datetime import timedelta
-            start_dt = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days * 2)
-            start_date = start_dt.strftime('%Y-%m-%d')
+            start_date = get_start_date(stock_code, end_date, days)
         
         logger.info(f"[{self.name}] 获取 {stock_code} 数据: {start_date} ~ {end_date}")
         

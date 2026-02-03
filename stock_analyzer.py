@@ -215,7 +215,6 @@ class StockTrendAnalyzer:
         df['MA20'] = df['close'].rolling(window=20).mean()
         df['MA50'] = df['close'].rolling(window=50).mean()
         df['MA120'] = df['close'].rolling(window=120).mean()
-        df['MA200'] = df['close'].rolling(window=200).mean()
         if len(df) >= 200:
             df['MA200'] = df['close'].rolling(window=200).mean()
         else:
