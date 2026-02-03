@@ -2687,6 +2687,52 @@ class NotificationService:
             logger.error(f"发送 PushPlus 消息失败: {e}")
             return False
 
+    def _process_mermaid_charts(self, content: str) -> str:
+        """
+        将消息中的 mermaid 图表转换为图片 URL
+        
+        Args:
+            content: 包含 mermaid 图表的 Markdown 内容
+            
+        Returns:
+            处理后的 Markdown 内容，mermaid 代码块替换为图片 URL
+        """
+        import re
+        import base64
+        
+        def replace_mermaid(mermaid_code):
+            # 使用 mermaid.ink API 生成图片 URL
+            # 先进行 URL 编码和 base64 编码
+            encoded = base64.urlsafe_b64encode(mermaid_code.encode('utf-8')).decode('utf-8')
+            image_url = f"https://mermaid.ink/img/{encoded}"
+            
+            # 返回 Markdown 图片格式
+            return f"![mermaid diagram]({image_url})"
+        
+        # 1. 匹配传统的 ```mermaid 代码块
+        mermaid_pattern = re.compile(r'```mermaid\n([\s\S]*?)\n```', re.MULTILINE)
+        content = mermaid_pattern.sub(lambda match: replace_mermaid(match.group(1)), content)
+        
+        # 2. 匹配直接以 mermaid 关键字开头的图表（graph, flowchart, sequenceDiagram, classDiagram, stateDiagram, erDiagram, gantt, pie）
+        # 直接匹配完整的图表内容，使用更简单的方法
+        # 将内容按段落分割，然后处理每个段落
+        paragraphs = content.split('\n\n')
+        processed_paragraphs = []
+        
+        for paragraph in paragraphs:
+            # 检查段落是否以 mermaid 关键字开头
+            if re.match(r'\b(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie)\b', paragraph.strip()):
+                # 这是一个直接的 mermaid 图表，转换为图片
+                processed_paragraphs.append(replace_mermaid(paragraph.strip()))
+            else:
+                # 这不是 mermaid 图表，保持原样
+                processed_paragraphs.append(paragraph)
+        
+        # 重新组合内容
+        content = '\n\n'.join(processed_paragraphs)
+        
+        return content
+    
     def send_to_discord(self, content: str) -> bool:
         """
         推送消息到 Discord（支持 Webhook 和 Bot API）
@@ -2697,6 +2743,9 @@ class NotificationService:
         Returns:
             是否发送成功
         """
+        # 处理 mermaid 图表，转换为图片 URL
+        content = self._process_mermaid_charts(content)
+        
         # 优先使用 Webhook（配置简单，权限低）
         if self._discord_config['webhook_url']:
             return self._send_discord_webhook(content)
@@ -2725,11 +2774,131 @@ class NotificationService:
         logger.warning("AstrBot 配置不完整，跳过推送")
         return False
     
+    def _create_discord_embed(self, content: str) -> Dict[str, Any]:
+        """
+        创建美观的 Discord Embed 结构
+        
+        Args:
+            content: Markdown 格式的消息内容
+            
+        Returns:
+            Discord Embed 字典
+        """
+        import re
+        
+        # 根据内容类型选择颜色
+        def get_color_by_content(content):
+            content_lower = content.lower()
+            if any(word in content_lower for word in ['下跌', '风险', '卖出', '回调']):
+                return 15158332  # 红色
+            elif any(word in content_lower for word in ['上涨', '机会', '买入', '利好']):
+                return 3066993  # 绿色
+            elif any(word in content_lower for word in ['震荡', '观望', '调整', '中性']):
+                return 10038562  # 黄色
+            else:
+                return 5814783  # 蓝色
+        
+        # 提取内容中的图片URL
+        def extract_image_urls(content):
+            # 匹配 Markdown 图片格式 ![alt](url)
+            markdown_images = re.findall(r'!\[.*?\]\((.*?)\)', content)
+            # 匹配 HTML 图片格式 <img src="url">
+            html_images = re.findall(r'<img[^>]+src="([^"]+)"[^>]*>', content)
+            # 匹配直接的图片URL
+            direct_images = re.findall(r'\bhttps?://\S+\.(?:png|jpg|jpeg|gif|bmp|webp)\b', content, re.IGNORECASE)
+            
+            # 合并所有图片URL，去重
+            image_urls = list(set(markdown_images + html_images + direct_images))
+            return [url.strip() for url in image_urls if url.strip()]
+        
+        # 解析内容，提取标题和正文
+        lines = content.split('\n')
+        title = "📈 A股智能分析报告"
+        description = ""
+        fields = []
+        
+        # 尝试提取第一行作为标题
+        if lines:
+            first_line = lines[0].strip()
+            if first_line.startswith('#'):
+                title = first_line.strip('# ')
+                # 处理正文，提取结构化信息
+                current_section = ""
+                section_content = []
+                
+                for line in lines[1:]:
+                    line = line.strip()
+                    if line.startswith('## '):
+                        # 保存上一个section
+                        if current_section and section_content:
+                            fields.append({
+                                "name": current_section,
+                                "value": '\n'.join(section_content)[:1024],  # Discord field value limit is 1024 characters
+                                "inline": False
+                            })
+                        # 开始新section
+                        current_section = line.strip('# ')
+                        section_content = []
+                    elif line:
+                        if current_section:
+                            section_content.append(line)
+                        else:
+                            # 正文开头的描述部分
+                            description += line + '\n'
+                
+                # 保存最后一个section
+                if current_section and section_content:
+                    fields.append({
+                        "name": current_section,
+                        "value": '\n'.join(section_content)[:1024],
+                        "inline": False
+                    })
+            else:
+                # 没有标题，整个内容作为描述
+                description = content
+        
+        # 优化描述，去除多余空行
+        description = '\n'.join([line for line in description.split('\n') if line.strip()])[:2048]  # Discord description limit is 2048 characters
+        
+        # 提取图片URL作为缩略图
+        image_urls = extract_image_urls(content)
+        thumbnail_url = image_urls[0] if image_urls else "https://picsum.photos/400/200?random=1"
+        
+        # 构建 embed 结构
+        embed = {
+            "title": title,
+            "description": description,
+            "color": get_color_by_content(content),  # 根据内容类型动态选择颜色
+            "timestamp": self._get_current_time_iso(),
+            "footer": {
+                "text": "A股智能分析机器人 | 数据仅供参考，不构成投资建议",
+                "icon_url": "https://picsum.photos/200"
+            },
+            "fields": fields,
+            "author": {
+                "name": "A股智能分析系统",
+                "icon_url": "https://picsum.photos/200"
+            },
+            "thumbnail": {
+                "url": thumbnail_url  # 使用内容中的图片作为缩略图，没有则使用默认图片
+            }
+        }
+        
+        return embed
+    
+    def _get_current_time_iso(self) -> str:
+        """
+        获取当前时间的 ISO 格式
+        
+        Returns:
+            ISO 格式的当前时间字符串
+        """
+        from datetime import datetime
+        return datetime.utcnow().isoformat() + "Z"
+    
     def _send_discord_webhook(self, content: str) -> bool:
         """
         使用 Webhook 发送消息到 Discord
-        
-        Discord Webhook 支持 Markdown 格式
         
         Args:
             content: Markdown 格式的消息内容
@@ -2738,10 +2907,15 @@ class NotificationService:
             是否发送成功
         """
         try:
+            # 创建美观的 embed
+            embed = self._create_discord_embed(content)
+            
             payload = {
-                'content': content,
                 'username': 'A股分析机器人',
-                'avatar_url': 'https://picsum.photos/200'
+                'avatar_url': 'https://picsum.photos/200',
+                'embeds': [embed],
+                # 对于太长的内容，保留一部分作为 preview
+                'content': content[:100] + '...' if len(content) > 100 else content
             }
             
             response = requests.post(
@@ -2776,8 +2950,12 @@ class NotificationService:
                 'Content-Type': 'application/json'
             }
             
+            # 创建美观的 embed
+            embed = self._create_discord_embed(content)
+            
             payload = {
-                'content': content
+                'content': content[:100] + '...' if len(content) > 100 else content,
+                'embeds': [embed]
             }
             
             url = f'https://discord.com/api/v10/channels/{self._discord_config["channel_id"]}/messages'
