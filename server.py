@@ -37,7 +37,9 @@ app = FastAPI(
 # CORS 配置
 # ============================================================
 
-# 允许的跨域来源（React 开发服务器默认端口）
+import os
+
+# 允许的跨域来源
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -45,9 +47,20 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# 从环境变量添加额外的允许来源（支持 ngrok 等公网访问）
+# 例如: CORS_ORIGINS=https://abc123.ngrok.io,https://xyz.ngrok-free.app
+extra_origins = os.environ.get("CORS_ORIGINS", "")
+if extra_origins:
+    ALLOWED_ORIGINS.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
+
+# 如果设置了 CORS_ALLOW_ALL=true，则允许所有来源（开发/演示用，生产环境慎用）
+if os.environ.get("CORS_ALLOW_ALL", "").lower() == "true":
+    ALLOWED_ORIGINS = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    # allow_credentials=True if ALLOWED_ORIGINS != ["*"] else False,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -115,7 +128,7 @@ async def health_check() -> HealthResponse:
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "server:app",
         host="0.0.0.0",
