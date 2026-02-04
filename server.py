@@ -18,6 +18,10 @@ from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# 导入 API v1 路由
+from api.v1 import api_v1_router
+from api.middlewares.error_handler import add_error_handlers
+
 # ============================================================
 # FastAPI 应用实例
 # ============================================================
@@ -45,6 +49,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================
+# 注册 API v1 路由
+# ============================================================
+
+app.include_router(api_v1_router)
+
+# 添加全局异常处理器
+add_error_handlers(app)
 
 
 # ============================================================
