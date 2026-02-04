@@ -1,53 +1,46 @@
 import React from 'react';
-import type { AnalysisResult } from '../../types/analysis';
-import { Card } from '../common';
+import type { AnalysisResult, AnalysisReport } from '../../types/analysis';
+import { ReportOverview } from './ReportOverview';
+import { ReportStrategy } from './ReportStrategy';
+import { ReportNews } from './ReportNews';
+import { ReportDetails } from './ReportDetails';
 
 interface ReportSummaryProps {
-  data: AnalysisResult;
+  data: AnalysisResult | AnalysisReport;
+  isHistory?: boolean;
 }
 
-export const ReportSummary: React.FC<ReportSummaryProps> = ({ data }) => {
+/**
+ * 完整报告展示组件
+ * 整合概览、策略、资讯、详情四个区域
+ */
+export const ReportSummary: React.FC<ReportSummaryProps> = ({
+  data,
+  isHistory = false,
+}) => {
+  // 兼容 AnalysisResult 和 AnalysisReport 两种数据格式
+  const report: AnalysisReport = 'report' in data ? data.report : data;
+  const queryId = 'queryId' in data ? data.queryId : report.meta.queryId;
+
+  const { meta, summary, strategy, details } = report;
+
   return (
-    <div className="space-y-4">
-      <Card title="基本信息">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <span className="text-gray-600">股票名称:</span>
-            <span className="ml-2 font-medium">{data.stockName}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">代码:</span>
-            <span className="ml-2 font-medium">{data.stockCode}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">情绪评分:</span>
-            <span className="ml-2 font-medium text-blue-600">{data.summary.sentimentScore}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">时间:</span>
-            <span className="ml-2 text-gray-500">{new Date(data.createdAt).toLocaleString()}</span>
-          </div>
-        </div>
-      </Card>
+    <div className="space-y-6 animate-fade-in">
+      {/* 概览区（首屏） */}
+      <ReportOverview
+        meta={meta}
+        summary={summary}
+        isHistory={isHistory}
+      />
 
-      <Card title="分析摘要">
-        <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
-          {data.summary.analysisSummary}
-        </p>
-      </Card>
+      {/* 策略点位区 */}
+      <ReportStrategy strategy={strategy} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card title="操作建议">
-          <p className="text-gray-800 font-medium">
-            {data.summary.operationAdvice}
-          </p>
-        </Card>
-        <Card title="趋势预测">
-          <p className="text-gray-800 font-medium">
-            {data.summary.trendPrediction}
-          </p>
-        </Card>
-      </div>
+      {/* 资讯区 */}
+      <ReportNews newsContent={details?.newsContent} />
+
+      {/* 透明度与追溯区 */}
+      <ReportDetails details={details} queryId={queryId} />
     </div>
   );
 };
