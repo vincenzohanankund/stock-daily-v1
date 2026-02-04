@@ -4,10 +4,10 @@ import type { HistoryItem, AnalysisReport } from '../types/analysis';
 import { historyApi } from '../api/history';
 import { analysisApi } from '../api/analysis';
 import { validateStockCode } from '../utils/validation';
-import { formatDateTime, getRecentStartDate, toDateInputValue } from '../utils/format';
-import { getSentimentColor } from '../types/analysis';
+import { getRecentStartDate, toDateInputValue } from '../utils/format';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { ReportSummary } from '../components/report';
+import { HistoryList } from '../components/history';
 
 /**
  * 首页 - 单页设计
@@ -21,9 +21,13 @@ const HomePage: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [inputError, setInputError] = useState<string>();
 
-  // 历史列表状态
+// 历史列表状态
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   // 报告详情状态
   const [selectedReport, setSelectedReport] = useState<AnalysisReport | null>(null);
@@ -32,16 +36,35 @@ const HomePage: React.FC = () => {
   // 用于跟踪当前分析请求，避免竞态条件
   const analysisRequestIdRef = useRef<number>(0);
 
-  // 加载历史列表
-  const fetchHistory = useCallback(async (autoSelectFirst = false) => {
-    setIsLoadingHistory(true);
+// 加载历史列表
+  const fetchHistory = useCallback(async (autoSelectFirst = false, reset = true) => {
+    if (reset) {
+      setIsLoadingHistory(true);
+      setCurrentPage(1);
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    const page = reset ? 1 : currentPage + 1;
+
     try {
       const response = await historyApi.getList({
         startDate: getRecentStartDate(30),
         endDate: toDateInputValue(new Date()),
-        limit: 50,
+        page,
+        limit: pageSize,
       });
-      setHistoryItems(response.items);
+
+      if (reset) {
+        setHistoryItems(response.items);
+      } else {
+        setHistoryItems(prev => [...prev, ...response.items]);
+      }
+
+      // 判断是否还有更多数据
+      const totalLoaded = reset ? response.items.length : historyItems.length + response.items.length;
+      setHasMore(totalLoaded < response.total);
+      setCurrentPage(page);
 
       // 如果需要自动选择第一条，且有数据，且当前没有选中报告
       if (autoSelectFirst && response.items.length > 0 && !selectedReport) {
@@ -60,8 +83,16 @@ const HomePage: React.FC = () => {
       console.error('Failed to fetch history:', err);
     } finally {
       setIsLoadingHistory(false);
+      setIsLoadingMore(false);
     }
-  }, [selectedReport]);
+  }, [selectedReport, currentPage, historyItems.length, pageSize]);
+
+  // 加载更多历史记录
+  const handleLoadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      fetchHistory(false, false);
+    }
+  }, [fetchHistory, isLoadingMore, hasMore]);
 
   // 初始加载 - 自动选择第一条
   useEffect(() => {
@@ -178,79 +209,16 @@ const HomePage: React.FC = () => {
 
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden p-3 gap-3">
-        {/* 左侧历史列表 - 毛玻璃卡片 */}
-        <aside className="w-64 flex-shrink-0 glass-card overflow-hidden flex flex-col h-[calc(66vh)]">
-          <div className="p-3 flex-1 overflow-y-auto">
-            <h2 className="text-xs font-medium text-purple uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              历史记录
-            </h2>
-
-            {isLoadingHistory ? (
-              <div className="flex justify-center py-6">
-                <div className="w-5 h-5 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
-              </div>
-            ) : historyItems.length === 0 ? (
-              <div className="text-center py-6 text-muted text-xs">
-                暂无历史记录
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {historyItems.map((item) => (
-                  <button
-                    key={item.queryId}
-                    type="button"
-                    onClick={() => handleHistoryClick(item.queryId)}
-                    className={`history-item w-full text-left ${selectedReport?.meta.queryId === item.queryId ? 'active' : ''
-                      }`}
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      {/* 情感分数指示条 */}
-                      {item.sentimentScore !== undefined && (
-                        <span
-                          className="w-0.5 h-8 rounded-full flex-shrink-0"
-                          style={{
-                            backgroundColor: getSentimentColor(item.sentimentScore),
-                            boxShadow: `0 0 6px ${getSentimentColor(item.sentimentScore)}40`
-                          }}
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span className="font-medium text-white truncate text-xs">
-                            {item.stockName || item.stockCode}
-                          </span>
-                          {item.sentimentScore !== undefined && (
-                            <span
-                              className="text-xs font-mono font-semibold px-1 py-0.5 rounded"
-                              style={{
-                                color: getSentimentColor(item.sentimentScore),
-                                backgroundColor: `${getSentimentColor(item.sentimentScore)}15`
-                              }}
-                            >
-                              {item.sentimentScore}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-xs text-muted font-mono">
-                            {item.stockCode}
-                          </span>
-                          <span className="text-xs text-muted/50">·</span>
-                          <span className="text-xs text-muted">
-                            {formatDateTime(item.createdAt)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </aside>
+{/* 左侧历史列表 */}
+        <HistoryList
+          items={historyItems}
+          isLoading={isLoadingHistory}
+          isLoadingMore={isLoadingMore}
+          hasMore={hasMore}
+          selectedQueryId={selectedReport?.meta.queryId}
+          onItemClick={handleHistoryClick}
+          onLoadMore={handleLoadMore}
+        />
 
         {/* 右侧报告详情 */}
         <section className="flex-1 overflow-y-auto pl-1">
