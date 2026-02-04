@@ -14,6 +14,21 @@ from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 
+class RootResponse(BaseModel):
+    """API 根路由响应"""
+    
+    message: str = Field(..., description="API 运行状态消息", example="Daily Stock Analysis API is running")
+    version: Optional[str] = Field(None, description="API 版本", example="1.0.0")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Daily Stock Analysis API is running",
+                "version": "1.0.0"
+            }
+        }
+
+
 class HealthResponse(BaseModel):
     """健康检查响应"""
     

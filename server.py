@@ -13,7 +13,7 @@ Daily Stock Analysis - FastAPI 后端服务入口
     uvicorn server:app --reload --host 0.0.0.0 --port 8000
 """
 
-from typing import Dict
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # 导入 API v1 路由
 from api.v1 import api_v1_router
 from api.middlewares.error_handler import add_error_handlers
+from api.v1.schemas.common import RootResponse, HealthResponse
 
 # ============================================================
 # FastAPI 应用实例
@@ -28,7 +29,7 @@ from api.middlewares.error_handler import add_error_handlers
 
 app = FastAPI(
     title="Daily Stock Analysis API",
-    description="A股/港股/美股自选股智能分析系统 API",
+    description="A股/港股/美股自选股智能分析系统 API\n\n## 功能模块\n- 股票分析：触发 AI 智能分析\n- 历史记录：查询历史分析报告\n- 股票数据：获取行情数据\n\n## 认证方式\n当前版本暂无认证要求",
     version="1.0.0",
 )
 
@@ -40,6 +41,8 @@ app = FastAPI(
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
@@ -64,28 +67,46 @@ add_error_handlers(app)
 # 路由定义
 # ============================================================
 
-@app.get("/", response_model=Dict[str, str])
-async def root() -> Dict[str, str]:
+@app.get(
+    "/",
+    response_model=RootResponse,
+    tags=["Health"],
+    summary="API 根路由",
+    description="返回 API 运行状态信息"
+)
+async def root() -> RootResponse:
     """
     根路由 - API 状态信息
     
     Returns:
-        包含 API 运行状态消息的字典
+        RootResponse: 包含 API 运行状态消息和版本信息
     """
-    return {"message": "Daily Stock Analysis API is running"}
+    return RootResponse(
+        message="Daily Stock Analysis API is running",
+        version="1.0.0"
+    )
 
 
-@app.get("/api/health", response_model=Dict[str, str])
-async def health_check() -> Dict[str, str]:
+@app.get(
+    "/api/health",
+    response_model=HealthResponse,
+    tags=["Health"],
+    summary="健康检查",
+    description="用于负载均衡器或监控系统检查服务状态"
+)
+async def health_check() -> HealthResponse:
     """
     健康检查接口
     
     用于前后端联调、负载均衡健康检查等场景
     
     Returns:
-        包含健康状态的字典
+        HealthResponse: 包含健康状态和时间戳的响应
     """
-    return {"status": "ok"}
+    return HealthResponse(
+        status="ok",
+        timestamp=datetime.now().isoformat()
+    )
 
 
 # ============================================================

@@ -9,6 +9,7 @@ API v1 Schemas 模块初始化
 """
 
 from api.v1.schemas.common import (
+    RootResponse,
     HealthResponse,
     ErrorResponse,
     SuccessResponse,
@@ -36,6 +37,7 @@ from api.v1.schemas.stocks import (
 
 __all__ = [
     # common
+    "RootResponse",
     "HealthResponse",
     "ErrorResponse",
     "SuccessResponse",

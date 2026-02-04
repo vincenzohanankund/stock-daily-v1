@@ -33,11 +33,11 @@ class AnalyzeRequest(BaseModel):
         pattern="^(simple|detailed)$"
     )
     force_refresh: bool = Field(
-        False, 
+        True,
         description="是否强制刷新（忽略缓存）"
     )
     async_mode: bool = Field(
-        False, 
+        False,
         description="是否使用异步模式"
     )
     

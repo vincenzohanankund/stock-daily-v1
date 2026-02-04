@@ -38,7 +38,10 @@ router = APIRouter()
     response_model=HistoryListResponse,
     responses={
         200: {"description": "历史记录列表"},
-    }
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取历史分析列表",
+    description="分页获取历史分析记录摘要，支持按股票代码和日期范围筛选"
 )
 async def get_history_list(
     stock_code: Optional[str] = Query(None, description="股票代码筛选"),
@@ -112,7 +115,10 @@ async def get_history_list(
     responses={
         200: {"description": "报告详情"},
         404: {"description": "报告不存在", "model": ErrorResponse},
-    }
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取历史报告详情",
+    description="根据 query_id 获取完整的历史分析报告"
 )
 async def get_history_detail(
     query_id: str,

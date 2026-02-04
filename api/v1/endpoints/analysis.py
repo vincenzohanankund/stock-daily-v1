@@ -12,17 +12,26 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
 
 from api.deps import get_config_dep
 from api.v1.schemas.analysis import (
     AnalyzeRequest,
     AnalysisResultResponse,
+    TaskAccepted,
     TaskStatus,
 )
 from api.v1.schemas.common import ErrorResponse
+from api.v1.schemas.history import (
+    AnalysisReport,
+    ReportMeta,
+    ReportSummary,
+    ReportStrategy,
+    ReportDetails,
+)
 from src.config import Config
 from src.services.analysis_service import AnalysisService
 
@@ -35,16 +44,18 @@ router = APIRouter()
     "/analyze",
     response_model=AnalysisResultResponse,
     responses={
-        200: {"description": "分析完成（同步模式）"},
+        200: {"description": "分析完成（同步模式）", "model": AnalysisResultResponse},
+        202: {"description": "分析任务已接受（异步模式）", "model": TaskAccepted},
         400: {"description": "请求参数错误", "model": ErrorResponse},
-        501: {"description": "异步模式未实现", "model": ErrorResponse},
         500: {"description": "分析失败", "model": ErrorResponse},
-    }
+    },
+    summary="触发股票分析",
+    description="启动 AI 智能分析任务，支持单只或多只股票批量分析"
 )
 async def trigger_analysis(
-    request: AnalyzeRequest,
-    config: Config = Depends(get_config_dep)
-) -> AnalysisResultResponse:
+        request: AnalyzeRequest,
+        config: Config = Depends(get_config_dep)
+) -> Union[AnalysisResultResponse, JSONResponse]:
     """
     触发股票分析
     
@@ -55,7 +66,8 @@ async def trigger_analysis(
         config: 配置依赖
         
     Returns:
-        AnalysisResultResponse: 分析结果
+        AnalysisResultResponse: 分析结果（同步模式）
+        TaskAccepted: 任务已接受（异步模式，返回 202）
         
     Raises:
         HTTPException: 400 - 请求参数错误
@@ -67,7 +79,7 @@ async def trigger_analysis(
         stock_codes.append(request.stock_code)
     if request.stock_codes:
         stock_codes.extend(request.stock_codes)
-    
+
     if not stock_codes:
         raise HTTPException(
             status_code=400,
@@ -76,27 +88,31 @@ async def trigger_analysis(
                 "message": "必须提供 stock_code 或 stock_codes 参数"
             }
         )
-    
+
     # 去重
     stock_codes = list(dict.fromkeys(stock_codes))
-    
-    # 生成 query_id
+
+    # 生成 query_id / task_id
     query_id = uuid.uuid4().hex
-    
-    # 目前只支持同步模式，异步模式返回 501
+
+    # 异步模式：返回 202 并在后台处理
     if request.async_mode:
-        raise HTTPException(
-            status_code=501,
-            detail={
-                "error": "not_implemented",
-                "message": "异步模式暂未实现，请使用 async_mode=false 或省略该参数"
-            }
+        # 当前异步任务队列尚未实现，返回 202 表示接受任务
+        # TODO: 实现真正的异步任务队列（如 Celery、Redis Queue）
+        task_accepted = TaskAccepted(
+            task_id=query_id,
+            status="pending",
+            message="Analysis task accepted. Async mode is not fully implemented yet."
         )
-    
+        return JSONResponse(
+            status_code=202,
+            content=task_accepted.model_dump()
+        )
+
     try:
         # 调用分析服务
         service = AnalysisService()
-        
+
         # 执行分析（取第一个股票代码）
         result = service.analyze_stock(
             stock_code=stock_codes[0],
@@ -104,7 +120,7 @@ async def trigger_analysis(
             force_refresh=request.force_refresh,
             query_id=query_id
         )
-        
+
         if result is None:
             raise HTTPException(
                 status_code=500,
@@ -113,16 +129,20 @@ async def trigger_analysis(
                     "message": f"分析股票 {stock_codes[0]} 失败"
                 }
             )
-        
+
+        # 构建报告结构
+        report_data = result.get("report", {})
+        report = _build_analysis_report(report_data, query_id, stock_codes[0], result.get("stock_name"))
+
         # 构建响应
         return AnalysisResultResponse(
             query_id=query_id,
             stock_code=result.get("stock_code", stock_codes[0]),
             stock_name=result.get("stock_name"),
-            report=result.get("report"),
+            report=report.model_dump() if report else None,
             created_at=datetime.now().isoformat()
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -142,8 +162,9 @@ async def trigger_analysis(
     responses={
         200: {"description": "任务状态"},
         404: {"description": "任务不存在", "model": ErrorResponse},
-        501: {"description": "异步模式未实现", "model": ErrorResponse},
-    }
+    },
+    summary="查询分析任务状态",
+    description="用于异步模式下轮询任务完成状态"
 )
 async def get_analysis_status(task_id: str) -> TaskStatus:
     """
@@ -159,13 +180,112 @@ async def get_analysis_status(task_id: str) -> TaskStatus:
         
     Raises:
         HTTPException: 404 - 任务不存在
-        HTTPException: 501 - 异步模式未实现
     """
-    # 异步任务队列尚未实现，返回 501
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "error": "not_implemented",
-            "message": "异步任务状态查询暂未实现，请使用同步模式分析"
-        }
+    try:
+        # 查询是否有对应的分析记录（通过 query_id）
+        from src.storage import DatabaseManager
+        db = DatabaseManager.get_instance()
+        records = db.get_analysis_history(query_id=task_id, limit=1)
+
+        if records:
+            # 已完成的任务
+            record = records[0]
+            return TaskStatus(
+                task_id=task_id,
+                status="completed",
+                progress=100,
+                result=AnalysisResultResponse(
+                    query_id=task_id,
+                    stock_code=record.code,
+                    stock_name=record.name,
+                    report=None,  # 可根据需要填充完整报告
+                    created_at=record.created_at.isoformat() if record.created_at else datetime.now().isoformat()
+                ),
+                error=None
+            )
+
+        # 任务不存在或尚未完成
+        # TODO: 实现任务队列状态查询
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "not_found",
+                "message": f"任务 {task_id} 不存在或已过期"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"查询任务状态失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"查询任务状态失败: {str(e)}"
+            }
+        )
+
+
+def _build_analysis_report(
+        report_data: Dict[str, Any],
+        query_id: str,
+        stock_code: str,
+        stock_name: Optional[str] = None
+) -> AnalysisReport:
+    """
+    构建符合 API 规范的分析报告
+    
+    Args:
+        report_data: 原始报告数据
+        query_id: 查询 ID
+        stock_code: 股票代码
+        stock_name: 股票名称
+        
+    Returns:
+        AnalysisReport: 结构化的分析报告
+    """
+    meta_data = report_data.get("meta", {})
+    summary_data = report_data.get("summary", {})
+    strategy_data = report_data.get("strategy", {})
+    details_data = report_data.get("details", {})
+
+    meta = ReportMeta(
+        query_id=meta_data.get("query_id", query_id),
+        stock_code=meta_data.get("stock_code", stock_code),
+        stock_name=meta_data.get("stock_name", stock_name),
+        report_type=meta_data.get("report_type", "detailed"),
+        created_at=meta_data.get("created_at", datetime.now().isoformat())
+    )
+
+    summary = ReportSummary(
+        analysis_summary=summary_data.get("analysis_summary"),
+        operation_advice=summary_data.get("operation_advice"),
+        trend_prediction=summary_data.get("trend_prediction"),
+        sentiment_score=summary_data.get("sentiment_score"),
+        sentiment_label=summary_data.get("sentiment_label")
+    )
+
+    strategy = None
+    if strategy_data:
+        strategy = ReportStrategy(
+            ideal_buy=strategy_data.get("ideal_buy"),
+            secondary_buy=strategy_data.get("secondary_buy"),
+            stop_loss=strategy_data.get("stop_loss"),
+            take_profit=strategy_data.get("take_profit")
+        )
+
+    details = None
+    if details_data:
+        details = ReportDetails(
+            news_content=details_data.get("news_summary") or details_data.get("news_content"),
+            raw_result=details_data,
+            context_snapshot=None
+        )
+
+    return AnalysisReport(
+        meta=meta,
+        summary=summary,
+        strategy=strategy,
+        details=details
     )

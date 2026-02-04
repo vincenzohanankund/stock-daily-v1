@@ -33,7 +33,10 @@ router = APIRouter()
     responses={
         200: {"description": "行情数据"},
         404: {"description": "股票不存在", "model": ErrorResponse},
-    }
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取股票实时行情",
+    description="获取指定股票的最新行情数据"
 )
 async def get_stock_quote(stock_code: str) -> StockQuote:
     """
@@ -96,11 +99,15 @@ async def get_stock_quote(stock_code: str) -> StockQuote:
     response_model=StockHistoryResponse,
     responses={
         200: {"description": "历史行情数据"},
-    }
+        422: {"description": "不支持的周期参数", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取股票历史行情",
+    description="获取指定股票的历史 K 线数据"
 )
 async def get_stock_history(
     stock_code: str,
-    period: str = Query("daily", description="K 线周期", regex="^(daily|weekly|monthly)$"),
+    period: str = Query("daily", description="K 线周期", pattern="^(daily|weekly|monthly)$"),
     days: int = Query(30, ge=1, le=365, description="获取天数")
 ) -> StockHistoryResponse:
     """
