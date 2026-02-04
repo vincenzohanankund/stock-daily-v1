@@ -8,20 +8,32 @@ Daily Stock Analysis - FastAPI 后端服务入口
 1. 提供 RESTful API 服务
 2. 配置 CORS 跨域支持
 3. 健康检查接口
+4. 托管前端静态文件（生产模式）
 
 启动方式：
     uvicorn server:app --reload --host 0.0.0.0 --port 8000
 """
 
+import os
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # 导入 API v1 路由
 from api.v1 import api_v1_router
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import RootResponse, HealthResponse
+
+# ============================================================
+# 静态文件目录配置
+# ============================================================
+
+# 静态文件目录（前端打包输出目录）
+STATIC_DIR = Path(__file__).parent / "static"
 
 # ============================================================
 # FastAPI 应用实例
@@ -80,24 +92,31 @@ add_error_handlers(app)
 # 路由定义
 # ============================================================
 
-@app.get(
-    "/",
-    response_model=RootResponse,
-    tags=["Health"],
-    summary="API 根路由",
-    description="返回 API 运行状态信息"
-)
-async def root() -> RootResponse:
-    """
-    根路由 - API 状态信息
-    
-    Returns:
-        RootResponse: 包含 API 运行状态消息和版本信息
-    """
-    return RootResponse(
-        message="Daily Stock Analysis API is running",
-        version="1.0.0"
+# 根路由：如果有前端静态文件则返回 index.html，否则返回 API 状态
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
+    @app.get("/", include_in_schema=False)
+    async def root():
+        """根路由 - 返回前端页面"""
+        return FileResponse(STATIC_DIR / "index.html")
+else:
+    @app.get(
+        "/",
+        response_model=RootResponse,
+        tags=["Health"],
+        summary="API 根路由",
+        description="返回 API 运行状态信息"
     )
+    async def root() -> RootResponse:
+        """
+        根路由 - API 状态信息
+        
+        Returns:
+            RootResponse: 包含 API 运行状态消息和版本信息
+        """
+        return RootResponse(
+            message="Daily Stock Analysis API is running",
+            version="1.0.0"
+        )
 
 
 @app.get(
@@ -120,6 +139,37 @@ async def health_check() -> HealthResponse:
         status="ok",
         timestamp=datetime.now().isoformat()
     )
+
+
+# ============================================================
+# 静态文件托管（前端 SPA）
+# ============================================================
+
+# 检查静态文件目录是否存在（已打包前端）
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
+    # 挂载静态资源目录（JS/CSS/图片等）
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    
+    # SPA 路由：所有非 API 路由返回 index.html
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(request: Request, full_path: str):
+        """
+        SPA 路由回退
+        
+        对于所有非 API 的 GET 请求，返回 index.html，
+        让前端路由处理页面导航
+        """
+        # 如果请求的是 API 路径，不处理（已被上面的路由处理）
+        if full_path.startswith("api/"):
+            return None
+        
+        # 检查是否请求的是静态文件
+        file_path = STATIC_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        
+        # 其他所有请求返回 index.html（SPA 路由）
+        return FileResponse(STATIC_DIR / "index.html")
 
 
 # ============================================================
