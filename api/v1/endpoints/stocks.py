@@ -38,7 +38,7 @@ router = APIRouter()
     summary="获取股票实时行情",
     description="获取指定股票的最新行情数据"
 )
-async def get_stock_quote(stock_code: str) -> StockQuote:
+def get_stock_quote(stock_code: str) -> StockQuote:
     """
     获取股票实时行情
     
@@ -55,6 +55,8 @@ async def get_stock_quote(stock_code: str) -> StockQuote:
     """
     try:
         service = StockService()
+        
+        # 使用 def 而非 async def，FastAPI 自动在线程池中执行
         result = service.get_realtime_quote(stock_code)
         
         if result is None:
@@ -105,7 +107,7 @@ async def get_stock_quote(stock_code: str) -> StockQuote:
     summary="获取股票历史行情",
     description="获取指定股票的历史 K 线数据"
 )
-async def get_stock_history(
+def get_stock_history(
     stock_code: str,
     period: str = Query("daily", description="K 线周期", pattern="^(daily|weekly|monthly)$"),
     days: int = Query(30, ge=1, le=365, description="获取天数")
@@ -125,6 +127,8 @@ async def get_stock_history(
     """
     try:
         service = StockService()
+        
+        # 使用 def 而非 async def，FastAPI 自动在线程池中执行
         result = service.get_history_data(
             stock_code=stock_code,
             period=period,

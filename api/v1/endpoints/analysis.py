@@ -7,6 +7,10 @@
 职责：
 1. 提供 POST /api/v1/analysis/analyze 触发分析接口
 2. 提供 GET /api/v1/analysis/status/{task_id} 查询任务状态接口
+
+注意：
+- 同步阻塞操作使用 def（非 async def），FastAPI 会自动放到线程池执行
+- 这样不会阻塞事件循环，其他请求可以正常处理
 """
 
 import logging
@@ -52,7 +56,7 @@ router = APIRouter()
     summary="触发股票分析",
     description="启动 AI 智能分析任务，支持单只或多只股票批量分析"
 )
-async def trigger_analysis(
+def trigger_analysis(
         request: AnalyzeRequest,
         config: Config = Depends(get_config_dep)
 ) -> Union[AnalysisResultResponse, JSONResponse]:
@@ -60,6 +64,9 @@ async def trigger_analysis(
     触发股票分析
     
     启动 AI 智能分析任务，支持单只或多只股票批量分析
+    
+    注意：使用 def 而非 async def，FastAPI 会自动将其放到线程池执行，
+    不会阻塞事件循环，其他请求可以正常处理。
     
     Args:
         request: 分析请求参数
@@ -111,9 +118,8 @@ async def trigger_analysis(
 
     try:
         # 调用分析服务
+        # 注意：因为使用 def，FastAPI 自动在线程池中执行，不会阻塞
         service = AnalysisService()
-
-        # 执行分析（取第一个股票代码）
         result = service.analyze_stock(
             stock_code=stock_codes[0],
             report_type=request.report_type,
@@ -166,7 +172,7 @@ async def trigger_analysis(
     summary="查询分析任务状态",
     description="用于异步模式下轮询任务完成状态"
 )
-async def get_analysis_status(task_id: str) -> TaskStatus:
+def get_analysis_status(task_id: str) -> TaskStatus:
     """
     查询分析任务状态
     
