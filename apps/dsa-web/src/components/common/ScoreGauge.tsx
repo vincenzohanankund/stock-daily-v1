@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getSentimentLabel } from '../../types/analysis';
 
 interface ScoreGaugeProps {
@@ -10,7 +11,7 @@ interface ScoreGaugeProps {
 
 /**
  * 情绪评分仪表盘 - 发光环形进度条
- * 参考金融终端风格设计
+ * 参考金融终端风格设计，带过渡动画
  */
 export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
   score,
@@ -18,6 +19,46 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
   showLabel = true,
   className = '',
 }) => {
+  // 动画状态
+  const [animatedScore, setAnimatedScore] = useState(0);
+  const [displayScore, setDisplayScore] = useState(0);
+  const animationRef = useRef<number | null>(null);
+  const prevScoreRef = useRef(0);
+
+  // 动画效果
+  useEffect(() => {
+    const startScore = prevScoreRef.current;
+    const endScore = score;
+    const duration = 1000; // 动画时长 ms
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // 使用 easeOutCubic 缓动函数
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      
+      const currentScore = startScore + (endScore - startScore) * easeOut;
+      setAnimatedScore(currentScore);
+      setDisplayScore(Math.round(currentScore));
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        prevScoreRef.current = endScore;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [score]);
+
   const label = getSentimentLabel(score);
 
   // 尺寸配置
@@ -33,16 +74,16 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
   
   // 从顶部开始，显示 270 度（3/4 圆弧）
   const arcLength = circumference * 0.75;
-  const progress = (score / 100) * arcLength;
+  const progress = (animatedScore / 100) * arcLength;
 
-  // 颜色映射
-  const getStrokeColor = () => {
-    if (score >= 60) return '#00d4ff'; // 青色 - 贪婪
-    if (score >= 40) return '#a855f7'; // 紫色 - 中性
+  // 颜色映射 - 使用动画分数计算颜色过渡
+  const getStrokeColor = (s: number) => {
+    if (s >= 60) return '#00d4ff'; // 青色 - 贪婪
+    if (s >= 40) return '#a855f7'; // 紫色 - 中性
     return '#ff4466'; // 红色 - 恐惧
   };
 
-  const strokeColor = getStrokeColor();
+  const strokeColor = getStrokeColor(animatedScore);
   const glowColor = `${strokeColor}66`;
 
   return (
@@ -104,7 +145,6 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
             transform={`rotate(135 ${width / 2} ${width / 2})`}
             opacity="0.3"
             filter={`url(#gauge-glow-${score})`}
-            className="transition-all duration-1000 ease-out"
           />
 
           {/* 进度圆弧 */}
@@ -118,7 +158,6 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
             strokeLinecap="round"
             strokeDasharray={`${progress} ${circumference}`}
             transform={`rotate(135 ${width / 2} ${width / 2})`}
-            className="transition-all duration-1000 ease-out"
           />
         </svg>
 
@@ -130,7 +169,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
               textShadow: `0 0 30px ${glowColor}`,
             }}
           >
-            {score}
+            {displayScore}
           </span>
           {showLabel && (
             <span
