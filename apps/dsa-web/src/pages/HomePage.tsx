@@ -42,7 +42,7 @@ const HomePage: React.FC = () => {
         limit: 50,
       });
       setHistoryItems(response.items);
-      
+
       // 如果需要自动选择第一条，且有数据，且当前没有选中报告
       if (autoSelectFirst && response.items.length > 0 && !selectedReport) {
         const firstItem = response.items[0];
@@ -72,7 +72,7 @@ const HomePage: React.FC = () => {
   const handleHistoryClick = async (queryId: string) => {
     // 取消当前分析请求的结果显示（通过递增 requestId）
     analysisRequestIdRef.current += 1;
-    
+
     setIsLoadingReport(true);
     try {
       const report = await historyApi.getDetail(queryId);
@@ -112,7 +112,7 @@ const HomePage: React.FC = () => {
         setSelectedReport(result.report);
         setStockCode('');
       }
-      
+
       // 无论如何都刷新历史列表
       fetchHistory();
     } catch (err) {
@@ -179,7 +179,7 @@ const HomePage: React.FC = () => {
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden p-3 gap-3">
         {/* 左侧历史列表 - 毛玻璃卡片 */}
-        <aside className="w-64 flex-shrink-0 glass-card overflow-hidden flex flex-col">
+        <aside className="w-64 flex-shrink-0 glass-card overflow-hidden flex flex-col h-[calc(66vh)]">
           <div className="p-3 flex-1 overflow-y-auto">
             <h2 className="text-xs font-medium text-purple uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +187,7 @@ const HomePage: React.FC = () => {
               </svg>
               历史记录
             </h2>
-            
+
             {isLoadingHistory ? (
               <div className="flex justify-center py-6">
                 <div className="w-5 h-5 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
@@ -203,16 +203,15 @@ const HomePage: React.FC = () => {
                     key={item.queryId}
                     type="button"
                     onClick={() => handleHistoryClick(item.queryId)}
-                    className={`history-item w-full text-left ${
-                      selectedReport?.meta.queryId === item.queryId ? 'active' : ''
-                    }`}
+                    className={`history-item w-full text-left ${selectedReport?.meta.queryId === item.queryId ? 'active' : ''
+                      }`}
                   >
                     <div className="flex items-center gap-2 w-full">
                       {/* 情感分数指示条 */}
                       {item.sentimentScore !== undefined && (
                         <span
                           className="w-0.5 h-8 rounded-full flex-shrink-0"
-                          style={{ 
+                          style={{
                             backgroundColor: getSentimentColor(item.sentimentScore),
                             boxShadow: `0 0 6px ${getSentimentColor(item.sentimentScore)}40`
                           }}
@@ -226,7 +225,7 @@ const HomePage: React.FC = () => {
                           {item.sentimentScore !== undefined && (
                             <span
                               className="text-xs font-mono font-semibold px-1 py-0.5 rounded"
-                              style={{ 
+                              style={{
                                 color: getSentimentColor(item.sentimentScore),
                                 backgroundColor: `${getSentimentColor(item.sentimentScore)}15`
                               }}
