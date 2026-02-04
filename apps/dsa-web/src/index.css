@@ -8,8 +8,8 @@
   --color-cyan-glow: rgba(0, 212, 255, 0.4);
   
   /* 辅助色 - 紫色系 */
-  --color-purple: #a855f7;
-  --color-purple-dim: #7c3aed;
+  --color-purple: #00d4ff;
+  --color-purple-dim: #00a8cc;
   --color-purple-glow: rgba(168, 85, 247, 0.3);
   
   /* 状态色 */
@@ -27,7 +27,7 @@
   --border-dim: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-accent: rgba(0, 212, 255, 0.3);
-  --border-purple: rgba(168, 85, 247, 0.3);
+  --border-purple: rgba(47, 165, 245, 0.3);
   
   /* 文字色 */
   --text-primary: #ffffff;
@@ -70,9 +70,9 @@ body {
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(168, 85, 247, 0.2) 0%,
+    rgba(85, 198, 247, 0.2) 0%,
     rgba(0, 212, 255, 0.1) 50%,
-    rgba(168, 85, 247, 0.2) 100%
+    rgba(85, 198, 247, 0.2) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -106,7 +106,7 @@ body {
   padding: 1px;
   background: linear-gradient(
     180deg,
-    rgba(168, 85, 247, 0.4) 0%,
+    rgba(67, 178, 246, 0.4) 0%,
     rgba(168, 85, 247, 0.1) 50%,
     rgba(0, 212, 255, 0.2) 100%
   );
@@ -142,9 +142,9 @@ body {
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(168, 85, 247, 0.25) 0%,
+    rgba(85, 209, 247, 0.25) 0%,
     rgba(0, 212, 255, 0.15) 50%,
-    rgba(168, 85, 247, 0.1) 100%
+    rgba(85, 209, 247, 0.1) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -192,7 +192,7 @@ body {
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(168, 85, 247, 0.15) 0%,
+    rgba(85, 185, 247, 0.15) 0%,
     transparent 50%,
     rgba(0, 212, 255, 0.1) 100%
   );
