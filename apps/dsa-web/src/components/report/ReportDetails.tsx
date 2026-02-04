@@ -53,7 +53,7 @@ export const ReportDetails: React.FC<ReportDetailsProps> = ({
 
   return (
     <Card variant="bordered" padding="md" className="text-left">
-      <div className="mb-3">
+      <div className="mb-3 flex items-baseline gap-2">
         <span className="label-uppercase">TRANSPARENCY</span>
         <h3 className="text-base font-semibold text-white mt-0.5">数据追溯</h3>
       </div>

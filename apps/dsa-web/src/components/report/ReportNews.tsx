@@ -48,9 +48,9 @@ export const ReportNews: React.FC<ReportNewsProps> = ({ queryId, limit = 20 }) =
   return (
     <Card variant="bordered" padding="md">
       <div className="flex items-center justify-between mb-3">
-        <div>
+        <div className="mb-3 flex items-baseline gap-2">
           <span className="label-uppercase">NEWS FEED</span>
-          <h3 className="text-base font-semibold text-white mt-0.5">相关资讯</h3>
+          <h3 className="text-base font-semibold text-white">相关资讯</h3>
         </div>
         <div className="flex items-center gap-2">
           {isLoading && (
