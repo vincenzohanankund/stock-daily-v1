@@ -37,7 +37,7 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
       <ReportStrategy strategy={strategy} />
 
       {/* 资讯区 */}
-      <ReportNews newsContent={details?.newsContent} />
+      <ReportNews queryId={queryId} />
 
       {/* 透明度与追溯区 */}
       <ReportDetails details={details} queryId={queryId} />

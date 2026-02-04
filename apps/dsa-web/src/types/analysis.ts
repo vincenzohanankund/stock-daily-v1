@@ -139,6 +139,19 @@ export interface HistoryListResponse {
   items: HistoryItem[];
 }
 
+/** 新闻情报条目 */
+export interface NewsIntelItem {
+  title: string;
+  snippet: string;
+  url: string;
+}
+
+/** 新闻情报响应 */
+export interface NewsIntelResponse {
+  total: number;
+  items: NewsIntelItem[];
+}
+
 /** 历史列表筛选参数 */
 export interface HistoryFilters {
   stockCode?: string;

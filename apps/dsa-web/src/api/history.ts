@@ -5,6 +5,8 @@ import type {
   HistoryItem,
   HistoryFilters,
   AnalysisReport,
+  NewsIntelResponse,
+  NewsIntelItem,
 } from '../types/analysis';
 
 // ============ API 接口 ============
@@ -47,5 +49,22 @@ export const historyApi = {
   getDetail: async (queryId: string): Promise<AnalysisReport> => {
     const response = await apiClient.get<Record<string, unknown>>(`/api/v1/history/${queryId}`);
     return toCamelCase<AnalysisReport>(response.data);
+  },
+
+  /**
+   * 获取历史报告关联新闻
+   * @param queryId 分析记录唯一标识
+   * @param limit 返回数量限制
+   */
+  getNews: async (queryId: string, limit = 20): Promise<NewsIntelResponse> => {
+    const response = await apiClient.get<Record<string, unknown>>(`/api/v1/history/${queryId}/news`, {
+      params: { limit },
+    });
+
+    const data = toCamelCase<NewsIntelResponse>(response.data);
+    return {
+      total: data.total,
+      items: (data.items || []).map(item => toCamelCase<NewsIntelItem>(item)),
+    };
   },
 };
