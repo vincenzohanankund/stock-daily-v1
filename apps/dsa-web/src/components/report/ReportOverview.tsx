@@ -120,7 +120,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
 
         {/* 右侧：情绪指标 */}
         <div className="space-y-4">
-          <Card variant="bordered" padding="md">
+          <Card variant="bordered" padding="md" className="!overflow-visible">
             <div className="text-center">
               <h3 className="text-sm font-medium text-white mb-4">Market Sentiment</h3>
               <ScoreGauge score={summary.sentimentScore} size="lg" />

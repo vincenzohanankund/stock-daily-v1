@@ -56,7 +56,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
 
       <div className="relative" style={{ width, height: width }}>
         <svg 
-          className="gauge-ring" 
+          className="gauge-ring overflow-visible" 
           width={width} 
           height={width}
           style={{ filter: `drop-shadow(0 0 12px ${glowColor})` }}
