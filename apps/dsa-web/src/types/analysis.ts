@@ -87,6 +87,37 @@ export interface TaskStatus {
   error?: string;
 }
 
+/** 任务详情（用于任务列表和 SSE 事件） */
+export interface TaskInfo {
+  taskId: string;
+  stockCode: string;
+  stockName?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  message?: string;
+  reportType: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+}
+
+/** 任务列表响应 */
+export interface TaskListResponse {
+  total: number;
+  pending: number;
+  processing: number;
+  tasks: TaskInfo[];
+}
+
+/** 重复任务错误响应 */
+export interface DuplicateTaskError {
+  error: 'duplicate_task';
+  message: string;
+  stockCode: string;
+  existingTaskId: string;
+}
+
 // ============ 历史记录类型 ============
 
 /** 历史记录摘要（列表展示用） */

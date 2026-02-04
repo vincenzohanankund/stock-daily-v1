@@ -1,20 +1,22 @@
 import type React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { HistoryItem, AnalysisReport } from '../types/analysis';
+import type { HistoryItem, AnalysisReport, TaskInfo } from '../types/analysis';
 import { historyApi } from '../api/history';
-import { analysisApi } from '../api/analysis';
+import { analysisApi, DuplicateTaskError } from '../api/analysis';
 import { validateStockCode } from '../utils/validation';
 import { getRecentStartDate, toDateInputValue } from '../utils/format';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { ReportSummary } from '../components/report';
 import { HistoryList } from '../components/history';
+import { TaskPanel } from '../components/tasks';
+import { useTaskStream } from '../hooks';
 
 /**
  * 首页 - 单页设计
  * 顶部输入 + 左侧历史 + 右侧报告
  */
 const HomePage: React.FC = () => {
-  const { setLoading, setResult, setError: setStoreError } = useAnalysisStore();
+  const { setLoading, setError: setStoreError } = useAnalysisStore();
 
   // 输入状态
   const [stockCode, setStockCode] = useState('');
@@ -33,8 +35,59 @@ const HomePage: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<AnalysisReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
+  // 任务队列状态
+  const [activeTasks, setActiveTasks] = useState<TaskInfo[]>([]);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
   // 用于跟踪当前分析请求，避免竞态条件
   const analysisRequestIdRef = useRef<number>(0);
+
+  // 更新任务列表中的任务
+  const updateTask = useCallback((updatedTask: TaskInfo) => {
+    setActiveTasks((prev) => {
+      const index = prev.findIndex((t) => t.taskId === updatedTask.taskId);
+      if (index >= 0) {
+        const newTasks = [...prev];
+        newTasks[index] = updatedTask;
+        return newTasks;
+      }
+      return prev;
+    });
+  }, []);
+
+  // 移除已完成/失败的任务
+  const removeTask = useCallback((taskId: string) => {
+    setActiveTasks((prev) => prev.filter((t) => t.taskId !== taskId));
+  }, []);
+
+  // SSE 任务流
+  useTaskStream({
+    onTaskCreated: (task) => {
+      setActiveTasks((prev) => {
+        // 避免重复添加
+        if (prev.some((t) => t.taskId === task.taskId)) return prev;
+        return [...prev, task];
+      });
+    },
+    onTaskStarted: updateTask,
+    onTaskCompleted: (task) => {
+      // 刷新历史列表
+      fetchHistory();
+      // 延迟移除任务，让用户看到完成状态
+      setTimeout(() => removeTask(task.taskId), 2000);
+    },
+    onTaskFailed: (task) => {
+      updateTask(task);
+      // 显示错误提示
+      setStoreError(task.error || '分析失败');
+      // 延迟移除任务
+      setTimeout(() => removeTask(task.taskId), 5000);
+    },
+    onError: () => {
+      console.warn('SSE 连接断开，正在重连...');
+    },
+    enabled: true,
+  });
 
 // 加载历史列表
   const fetchHistory = useCallback(async (autoSelectFirst = false, reset = true) => {
@@ -115,7 +168,7 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // 分析股票
+  // 分析股票（异步模式）
   const handleAnalyze = async () => {
     const { valid, message, normalized } = validateStockCode(stockCode);
     if (!valid) {
@@ -124,6 +177,7 @@ const HomePage: React.FC = () => {
     }
 
     setInputError(undefined);
+    setDuplicateError(null);
     setIsAnalyzing(true);
     setLoading(true);
     setStoreError(null);
@@ -132,24 +186,28 @@ const HomePage: React.FC = () => {
     const currentRequestId = ++analysisRequestIdRef.current;
 
     try {
-      const result = await analysisApi.analyze({
+      // 使用异步模式提交分析
+      const response = await analysisApi.analyzeAsync({
         stockCode: normalized,
         reportType: 'detailed',
       });
 
-      // 只有当请求 ID 匹配时才更新报告（用户没有在分析期间切换到其他报告）
+      // 清空输入框
       if (currentRequestId === analysisRequestIdRef.current) {
-        setResult(result);
-        setSelectedReport(result.report);
         setStockCode('');
       }
 
-      // 无论如何都刷新历史列表
-      fetchHistory();
+      // 任务已提交，SSE 会推送更新
+      console.log('Task submitted:', response.taskId);
     } catch (err) {
       console.error('Analysis failed:', err);
       if (currentRequestId === analysisRequestIdRef.current) {
-        setStoreError(err instanceof Error ? err.message : '分析失败');
+        if (err instanceof DuplicateTaskError) {
+          // 显示重复任务错误
+          setDuplicateError(`股票 ${err.stockCode} 正在分析中，请等待完成`);
+        } else {
+          setStoreError(err instanceof Error ? err.message : '分析失败');
+        }
       }
     } finally {
       setIsAnalyzing(false);
@@ -185,6 +243,9 @@ const HomePage: React.FC = () => {
             {inputError && (
               <p className="absolute -bottom-4 left-0 text-xs text-danger">{inputError}</p>
             )}
+            {duplicateError && (
+              <p className="absolute -bottom-4 left-0 text-xs text-warning">{duplicateError}</p>
+            )}
           </div>
           <button
             type="button"
@@ -209,16 +270,23 @@ const HomePage: React.FC = () => {
 
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden p-3 gap-3">
-{/* 左侧历史列表 */}
-        <HistoryList
-          items={historyItems}
-          isLoading={isLoadingHistory}
-          isLoadingMore={isLoadingMore}
-          hasMore={hasMore}
-          selectedQueryId={selectedReport?.meta.queryId}
-          onItemClick={handleHistoryClick}
-          onLoadMore={handleLoadMore}
-        />
+{/* 左侧：任务面板 + 历史列表 */}
+        <div className="flex flex-col gap-3 w-64 flex-shrink-0">
+          {/* 任务面板 */}
+          <TaskPanel tasks={activeTasks} />
+
+          {/* 历史列表 */}
+          <HistoryList
+            items={historyItems}
+            isLoading={isLoadingHistory}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            selectedQueryId={selectedReport?.meta.queryId}
+            onItemClick={handleHistoryClick}
+            onLoadMore={handleLoadMore}
+            className="flex-1 min-h-0"
+          />
+        </div>
 
         {/* 右侧报告详情 */}
         <section className="flex-1 overflow-y-auto pl-1">

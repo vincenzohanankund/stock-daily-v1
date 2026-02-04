@@ -12,6 +12,7 @@ interface HistoryListProps {
   selectedQueryId?: string;
   onItemClick: (queryId: string) => void;
   onLoadMore: () => void;
+  className?: string;
 }
 
 /**
@@ -26,6 +27,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   selectedQueryId,
   onItemClick,
   onLoadMore,
+  className = '',
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   }, [handleObserver]);
 
   return (
-    <aside className="w-64 shrink-0 glass-card overflow-hidden flex flex-col h-[calc(66vh)]">
+    <aside className={`glass-card overflow-hidden flex flex-col ${className}`}>
       <div ref={scrollContainerRef} className="p-3 flex-1 overflow-y-auto">
         <h2 className="text-xs font-medium text-purple uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
