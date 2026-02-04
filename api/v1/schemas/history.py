@@ -63,6 +63,38 @@ class HistoryListResponse(BaseModel):
         }
 
 
+class NewsIntelItem(BaseModel):
+    """新闻情报条目"""
+
+    title: str = Field(..., description="新闻标题")
+    snippet: str = Field("", description="新闻摘要（最多50字）")
+    url: str = Field(..., description="新闻链接")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "公司发布业绩快报，营收同比增长 20%",
+                "snippet": "公司公告显示，季度营收同比增长 20%...",
+                "url": "https://example.com/news/123"
+            }
+        }
+
+
+class NewsIntelResponse(BaseModel):
+    """新闻情报响应"""
+
+    total: int = Field(..., description="新闻条数")
+    items: List[NewsIntelItem] = Field(default_factory=list, description="新闻列表")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total": 2,
+                "items": []
+            }
+        }
+
+
 class ReportMeta(BaseModel):
     """报告元信息"""
     

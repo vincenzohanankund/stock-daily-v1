@@ -325,6 +325,60 @@
           }
         }
       }
+    },
+    "/api/v1/history/{query_id}/news": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "获取历史报告关联新闻",
+        "description": "根据 query_id 获取关联的新闻情报列表（为空也返回 200）",
+        "operationId": "getHistoryNews",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "required": true,
+            "description": "分析记录唯一标识",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "返回数量限制",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "新闻情报列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsIntelResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -644,6 +698,49 @@
           "total",
           "page",
           "limit",
+          "items"
+        ]
+      },
+      "NewsIntelItem": {
+        "type": "object",
+        "description": "新闻情报条目",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "新闻标题"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "新闻摘要（最多50字）"
+          },
+          "url": {
+            "type": "string",
+            "description": "新闻链接"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ]
+      },
+      "NewsIntelResponse": {
+        "type": "object",
+        "description": "新闻情报响应",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "新闻条数"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewsIntelItem"
+            },
+            "description": "新闻列表"
+          }
+        },
+        "required": [
+          "total",
           "items"
         ]
       },

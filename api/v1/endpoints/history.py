@@ -18,6 +18,8 @@ from api.deps import get_database_manager
 from api.v1.schemas.history import (
     HistoryListResponse,
     HistoryItem,
+    NewsIntelItem,
+    NewsIntelResponse,
     AnalysisReport,
     ReportMeta,
     ReportSummary,
@@ -221,5 +223,60 @@ def get_history_detail(
             detail={
                 "error": "internal_error",
                 "message": f"查询历史详情失败: {str(e)}"
+            }
+        )
+
+
+@router.get(
+    "/{query_id}/news",
+    response_model=NewsIntelResponse,
+    responses={
+        200: {"description": "新闻情报列表"},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="获取历史报告关联新闻",
+    description="根据 query_id 获取关联的新闻情报列表（为空也返回 200）"
+)
+def get_history_news(
+    query_id: str,
+    limit: int = Query(20, ge=1, le=100, description="返回数量限制"),
+    db_manager: DatabaseManager = Depends(get_database_manager)
+) -> NewsIntelResponse:
+    """
+    获取历史报告关联新闻
+
+    Args:
+        query_id: 分析记录唯一标识
+        limit: 返回数量限制
+        db_manager: 数据库管理器依赖
+
+    Returns:
+        NewsIntelResponse: 新闻情报列表
+    """
+    try:
+        service = HistoryService(db_manager)
+        items = service.get_news_intel(query_id=query_id, limit=limit)
+
+        response_items = [
+            NewsIntelItem(
+                title=item.get("title", ""),
+                snippet=item.get("snippet"),
+                url=item.get("url", "")
+            )
+            for item in items
+        ]
+
+        return NewsIntelResponse(
+            total=len(response_items),
+            items=response_items
+        )
+
+    except Exception as e:
+        logger.error(f"查询新闻情报失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"查询新闻情报失败: {str(e)}"
             }
         )

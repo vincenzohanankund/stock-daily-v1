@@ -168,6 +168,37 @@ class HistoryService:
         except Exception as e:
             logger.error(f"查询历史详情失败: {e}", exc_info=True)
             return None
+
+    def get_news_intel(self, query_id: str, limit: int = 20) -> List[Dict[str, str]]:
+        """
+        获取指定 query_id 关联的新闻情报
+
+        Args:
+            query_id: 分析记录唯一标识
+            limit: 返回数量限制
+
+        Returns:
+            新闻情报列表（包含 title、snippet、url）
+        """
+        try:
+            records = self.db.get_news_intel_by_query_id(query_id=query_id, limit=limit)
+
+            items: List[Dict[str, str]] = []
+            for record in records:
+                snippet = (record.snippet or "").strip()
+                if len(snippet) > 50:
+                    snippet = f"{snippet[:47]}..."
+                items.append({
+                    "title": record.title,
+                    "snippet": snippet,
+                    "url": record.url,
+                })
+
+            return items
+
+        except Exception as e:
+            logger.error(f"查询新闻情报失败: {e}", exc_info=True)
+            return []
     
     def _get_sentiment_label(self, score: int) -> str:
         """

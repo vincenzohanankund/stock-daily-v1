@@ -534,6 +534,32 @@ class DatabaseManager:
 
             return list(results)
 
+    def get_news_intel_by_query_id(self, query_id: str, limit: int = 20) -> List[NewsIntel]:
+        """
+        根据 query_id 获取新闻情报列表
+
+        Args:
+            query_id: 分析记录唯一标识
+            limit: 返回数量限制
+
+        Returns:
+            NewsIntel 列表（按发布时间或抓取时间倒序）
+        """
+        from sqlalchemy import func
+
+        with self.get_session() as session:
+            results = session.execute(
+                select(NewsIntel)
+                .where(NewsIntel.query_id == query_id)
+                .order_by(
+                    desc(func.coalesce(NewsIntel.published_date, NewsIntel.fetched_at)),
+                    desc(NewsIntel.fetched_at)
+                )
+                .limit(limit)
+            ).scalars().all()
+
+            return list(results)
+
     def save_analysis_history(
         self,
         result: Any,
