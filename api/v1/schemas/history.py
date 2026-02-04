@@ -71,6 +71,8 @@ class ReportMeta(BaseModel):
     stock_name: Optional[str] = Field(None, description="股票名称")
     report_type: Optional[str] = Field(None, description="报告类型")
     created_at: Optional[str] = Field(None, description="创建时间")
+    current_price: Optional[float] = Field(None, description="分析时股价")
+    change_pct: Optional[float] = Field(None, description="分析时涨跌幅(%)")
 
 
 class ReportSummary(BaseModel):

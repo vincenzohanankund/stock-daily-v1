@@ -156,13 +156,32 @@ def get_history_detail(
                 }
             )
         
+        # 从 context_snapshot 中提取价格信息
+        current_price = None
+        change_pct = None
+        context_snapshot = result.get("context_snapshot")
+        if context_snapshot and isinstance(context_snapshot, dict):
+            # 尝试从 enhanced_context.realtime 获取
+            enhanced_context = context_snapshot.get("enhanced_context") or {}
+            realtime = enhanced_context.get("realtime") or {}
+            current_price = realtime.get("price")
+            change_pct = realtime.get("change_pct") or realtime.get("change_60d")
+            
+            # 也尝试从 realtime_quote_raw 获取
+            if current_price is None:
+                realtime_quote_raw = context_snapshot.get("realtime_quote_raw") or {}
+                current_price = realtime_quote_raw.get("price")
+                change_pct = change_pct or realtime_quote_raw.get("change_pct") or realtime_quote_raw.get("pct_chg")
+        
         # 构建响应模型
         meta = ReportMeta(
             query_id=result.get("query_id", query_id),
             stock_code=result.get("stock_code", ""),
             stock_name=result.get("stock_name"),
             report_type=result.get("report_type"),
-            created_at=result.get("created_at")
+            created_at=result.get("created_at"),
+            current_price=current_price,
+            change_pct=change_pct
         )
         
         summary = ReportSummary(

@@ -136,8 +136,8 @@ const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* 顶部输入栏 */}
-      <header className="flex-shrink-0 p-4 border-b border-white/5">
-        <div className="flex items-center gap-3 max-w-3xl">
+      <header className="flex-shrink-0 px-4 py-3 border-b border-white/5">
+        <div className="flex items-center gap-2 max-w-2xl">
           <div className="flex-1 relative">
             <input
               type="text"
@@ -152,18 +152,18 @@ const HomePage: React.FC = () => {
               className={`input-terminal w-full ${inputError ? 'border-danger/50' : ''}`}
             />
             {inputError && (
-              <p className="absolute -bottom-5 left-0 text-xs text-danger">{inputError}</p>
+              <p className="absolute -bottom-4 left-0 text-xs text-danger">{inputError}</p>
             )}
           </div>
           <button
             type="button"
             onClick={handleAnalyze}
             disabled={!stockCode || isAnalyzing}
-            className="btn-primary flex items-center gap-2 whitespace-nowrap"
+            className="btn-primary flex items-center gap-1.5 whitespace-nowrap"
           >
             {isAnalyzing ? (
               <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -177,27 +177,27 @@ const HomePage: React.FC = () => {
       </header>
 
       {/* 主内容区 */}
-      <main className="flex-1 flex overflow-hidden p-4 gap-4">
+      <main className="flex-1 flex overflow-hidden p-3 gap-3">
         {/* 左侧历史列表 - 毛玻璃卡片 */}
-        <aside className="w-72 flex-shrink-0 glass-card overflow-hidden flex flex-col">
-          <div className="p-4 flex-1 overflow-y-auto">
-            <h2 className="text-xs font-medium text-purple uppercase tracking-wider mb-4 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <aside className="w-64 flex-shrink-0 glass-card overflow-hidden flex flex-col">
+          <div className="p-3 flex-1 overflow-y-auto">
+            <h2 className="text-xs font-medium text-purple uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               历史记录
             </h2>
             
             {isLoadingHistory ? (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
+              <div className="flex justify-center py-6">
+                <div className="w-5 h-5 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
               </div>
             ) : historyItems.length === 0 ? (
-              <div className="text-center py-8 text-muted text-sm">
+              <div className="text-center py-6 text-muted text-xs">
                 暂无历史记录
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {historyItems.map((item) => (
                   <button
                     key={item.queryId}
@@ -207,25 +207,25 @@ const HomePage: React.FC = () => {
                       selectedReport?.meta.queryId === item.queryId ? 'active' : ''
                     }`}
                   >
-                    <div className="flex items-center gap-3 w-full">
+                    <div className="flex items-center gap-2 w-full">
                       {/* 情感分数指示条 */}
                       {item.sentimentScore !== undefined && (
                         <span
-                          className="w-1 h-10 rounded-full flex-shrink-0"
+                          className="w-0.5 h-8 rounded-full flex-shrink-0"
                           style={{ 
                             backgroundColor: getSentimentColor(item.sentimentScore),
-                            boxShadow: `0 0 8px ${getSentimentColor(item.sentimentScore)}40`
+                            boxShadow: `0 0 6px ${getSentimentColor(item.sentimentScore)}40`
                           }}
                         />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-white truncate text-sm">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="font-medium text-white truncate text-xs">
                             {item.stockName || item.stockCode}
                           </span>
                           {item.sentimentScore !== undefined && (
                             <span
-                              className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded"
+                              className="text-xs font-mono font-semibold px-1 py-0.5 rounded"
                               style={{ 
                                 color: getSentimentColor(item.sentimentScore),
                                 backgroundColor: `${getSentimentColor(item.sentimentScore)}15`
@@ -235,7 +235,7 @@ const HomePage: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-xs text-muted font-mono">
                             {item.stockCode}
                           </span>
@@ -254,11 +254,11 @@ const HomePage: React.FC = () => {
         </aside>
 
         {/* 右侧报告详情 */}
-        <section className="flex-1 overflow-y-auto pl-2">
+        <section className="flex-1 overflow-y-auto pl-1">
           {isLoadingReport ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-12 h-12 border-4 border-cyan/20 border-t-cyan rounded-full animate-spin" />
-              <p className="mt-4 text-secondary">加载报告中...</p>
+              <div className="w-10 h-10 border-3 border-cyan/20 border-t-cyan rounded-full animate-spin" />
+              <p className="mt-3 text-secondary text-sm">加载报告中...</p>
             </div>
           ) : selectedReport ? (
             <div className="max-w-4xl">
@@ -267,13 +267,13 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 mb-4 rounded-2xl bg-elevated flex items-center justify-center">
-                <svg className="w-8 h-8 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-12 h-12 mb-3 rounded-xl bg-elevated flex items-center justify-center">
+                <svg className="w-6 h-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-white mb-2">开始分析</h3>
-              <p className="text-sm text-muted max-w-xs">
+              <h3 className="text-base font-medium text-white mb-1.5">开始分析</h3>
+              <p className="text-xs text-muted max-w-xs">
                 输入股票代码进行分析，或从左侧选择历史报告查看
               </p>
             </div>

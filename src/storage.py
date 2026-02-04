@@ -250,6 +250,7 @@ class DatabaseManager:
     """
     
     _instance: Optional['DatabaseManager'] = None
+    _initialized: bool = False
     
     def __new__(cls, *args, **kwargs):
         """单例模式实现"""
@@ -265,7 +266,7 @@ class DatabaseManager:
         Args:
             db_url: 数据库连接 URL（可选，默认从配置读取）
         """
-        if self._initialized:
+        if getattr(self, '_initialized', False):
             return
         
         if db_url is None:
@@ -306,7 +307,9 @@ class DatabaseManager:
     def reset_instance(cls) -> None:
         """重置单例（用于测试）"""
         if cls._instance is not None:
-            cls._instance._engine.dispose()
+            if hasattr(cls._instance, '_engine') and cls._instance._engine is not None:
+                cls._instance._engine.dispose()
+            cls._instance._initialized = False
             cls._instance = None
 
     @classmethod
@@ -335,6 +338,11 @@ class DatabaseManager:
                 # 执行查询
                 session.commit()  # 如果需要
         """
+        if not getattr(self, '_initialized', False) or not hasattr(self, '_SessionLocal'):
+            raise RuntimeError(
+                "DatabaseManager 未正确初始化。"
+                "请确保通过 DatabaseManager.get_instance() 获取实例。"
+            )
         session = self._SessionLocal()
         try:
             return session

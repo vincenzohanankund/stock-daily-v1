@@ -36,6 +36,8 @@ const mapReportMeta = (data: Record<string, unknown>): ReportMeta => ({
   stockName: (data.stock_name || data.stockName) as string,
   reportType: (data.report_type || data.reportType || 'detailed') as 'simple' | 'detailed',
   createdAt: (data.created_at || data.createdAt) as string,
+  currentPrice: (data.current_price || data.currentPrice) as number | undefined,
+  changePct: (data.change_pct || data.changePct) as number | undefined,
 });
 
 const mapReportSummary = (data: Record<string, unknown>): ReportSummary => ({

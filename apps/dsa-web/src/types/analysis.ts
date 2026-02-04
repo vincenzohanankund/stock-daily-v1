@@ -21,6 +21,8 @@ export interface ReportMeta {
   stockName: string;
   reportType: 'simple' | 'detailed';
   createdAt: string;
+  currentPrice?: number;
+  changePct?: number;
 }
 
 /** 情绪标签 */
