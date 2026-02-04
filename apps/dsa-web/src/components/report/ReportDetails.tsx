@@ -36,7 +36,7 @@ export const ReportDetails: React.FC<ReportDetailsProps> = ({
   const renderJson = (data: unknown) => {
     const jsonStr = JSON.stringify(data, null, 2);
     return (
-      <div className="relative">
+      <div className="relative overflow-hidden">
         <button
           type="button"
           onClick={() => copyToClipboard(jsonStr)}
@@ -44,7 +44,7 @@ export const ReportDetails: React.FC<ReportDetailsProps> = ({
         >
           {copied ? 'Copied!' : 'Copy'}
         </button>
-        <pre className="text-xs text-secondary font-mono overflow-x-auto p-3 bg-base rounded-lg max-h-80 overflow-y-auto text-left">
+        <pre className="text-xs text-secondary font-mono overflow-x-auto p-3 bg-base rounded-lg max-h-80 overflow-y-auto text-left w-0 min-w-full">
           {jsonStr}
         </pre>
       </div>
@@ -89,7 +89,7 @@ export const ReportDetails: React.FC<ReportDetailsProps> = ({
               </svg>
             </button>
             {showRaw && (
-              <div className="mt-2 animate-fade-in">
+              <div className="mt-2 animate-fade-in min-w-0 overflow-hidden">
                 {renderJson(details.rawResult)}
               </div>
             )}
@@ -115,7 +115,7 @@ export const ReportDetails: React.FC<ReportDetailsProps> = ({
               </svg>
             </button>
             {showSnapshot && (
-              <div className="mt-2 animate-fade-in">
+              <div className="mt-2 animate-fade-in min-w-0 overflow-hidden">
                 {renderJson(details.contextSnapshot)}
               </div>
             )}
