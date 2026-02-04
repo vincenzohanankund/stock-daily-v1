@@ -15,6 +15,8 @@ Daily Stock Analysis - FastAPI 后端服务入口
 """
 
 import os
+import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +29,44 @@ from fastapi.responses import FileResponse
 from api.v1 import api_v1_router
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import RootResponse, HealthResponse
+from src.config import get_config, setup_env
+
+# ============================================================
+# 初始化环境变量与日志
+# ============================================================
+
+setup_env()
+
+LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s'
+LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
+def setup_api_logging() -> None:
+    """
+    配置 FastAPI 日志输出（控制台）
+
+    确保通过 API 触发的分析日志可以在控制台看到
+    """
+    config = get_config()
+    level_name = (config.log_level or "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    if not root_logger.handlers:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
+        root_logger.addHandler(console_handler)
+    else:
+        # 若已有 handler，确保级别至少是 INFO
+        for handler in root_logger.handlers:
+            if handler.level == logging.NOTSET or handler.level > level:
+                handler.setLevel(level)
+
+
+setup_api_logging()
 
 # ============================================================
 # 静态文件目录配置
