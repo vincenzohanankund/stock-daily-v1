@@ -271,7 +271,7 @@ const HomePage: React.FC = () => {
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden p-3 gap-3">
 {/* 左侧：任务面板 + 历史列表 */}
-        <div className="flex flex-col gap-3 w-64 flex-shrink-0">
+        <div className="flex flex-col gap-3 w-64 flex-shrink-0 overflow-hidden">
           {/* 任务面板 */}
           <TaskPanel tasks={activeTasks} />
 
@@ -284,7 +284,7 @@ const HomePage: React.FC = () => {
             selectedQueryId={selectedReport?.meta.queryId}
             onItemClick={handleHistoryClick}
             onLoadMore={handleLoadMore}
-            className="flex-1 min-h-0"
+            className="max-h-[62vh] overflow-hidden"
           />
         </div>
 

@@ -36,8 +36,13 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   const handleObserver = useCallback(
     (entries: IntersectionObserverEntry[]) => {
       const target = entries[0];
+      // 只有当触发器真正可见且有更多数据时才加载
       if (target.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
-        onLoadMore();
+        // 确保容器有滚动能力（内容超过容器高度）
+        const container = scrollContainerRef.current;
+        if (container && container.scrollHeight > container.clientHeight) {
+          onLoadMore();
+        }
       }
     },
     [hasMore, isLoading, isLoadingMore, onLoadMore]
@@ -45,12 +50,13 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
   useEffect(() => {
     const trigger = loadMoreTriggerRef.current;
-    if (!trigger) return;
+    const container = scrollContainerRef.current;
+    if (!trigger || !container) return;
 
     const observer = new IntersectionObserver(handleObserver, {
-      root: scrollContainerRef.current,
-      rootMargin: '100px',
-      threshold: 0,
+      root: container,
+      rootMargin: '20px', // 减小预加载距离
+      threshold: 0.1, // 触发器至少 10% 可见时才触发
     });
 
     observer.observe(trigger);
@@ -131,7 +137,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             ))}
 
             {/* 加载更多触发器 */}
-            <div ref={loadMoreTriggerRef} className="h-1" />
+            <div ref={loadMoreTriggerRef} className="h-4" />
 
             {/* 加载更多状态 */}
             {isLoadingMore && (
