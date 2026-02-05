@@ -133,13 +133,39 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         '--webui',
         action='store_true',
-        help='启动本地配置 WebUI'
+        help='启动本地配置 WebUI（旧版 Gradio）'
     )
 
     parser.add_argument(
         '--webui-only',
         action='store_true',
-        help='仅启动 WebUI 服务，不自动执行分析（通过 /analysis API 手动触发）'
+        help='仅启动 WebUI 服务，不自动执行分析'
+    )
+
+    parser.add_argument(
+        '--serve',
+        action='store_true',
+        help='启动 FastAPI 后端服务（同时执行分析任务）'
+    )
+
+    parser.add_argument(
+        '--serve-only',
+        action='store_true',
+        help='仅启动 FastAPI 后端服务，不自动执行分析'
+    )
+
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8000,
+        help='FastAPI 服务端口（默认 8000）'
+    )
+
+    parser.add_argument(
+        '--host',
+        type=str,
+        default='0.0.0.0',
+        help='FastAPI 服务监听地址（默认 0.0.0.0）'
     )
 
     parser.add_argument(
@@ -256,6 +282,33 @@ def run_full_analysis(
         logger.exception(f"分析流程执行失败: {e}")
 
 
+def start_api_server(host: str, port: int, config: Config) -> None:
+    """
+    在后台线程启动 FastAPI 服务
+    
+    Args:
+        host: 监听地址
+        port: 监听端口
+        config: 配置对象
+    """
+    import threading
+    import uvicorn
+    
+    def run_server():
+        level_name = (config.log_level or "INFO").lower()
+        uvicorn.run(
+            "api.app:app",
+            host=host,
+            port=port,
+            log_level=level_name,
+            log_config=None,
+        )
+    
+    thread = threading.Thread(target=run_server, daemon=True)
+    thread.start()
+    logger.info(f"FastAPI 服务已启动: http://{host}:{port}")
+
+
 def start_bot_stream_clients(config: Config) -> None:
     """Start bot stream clients when enabled in config."""
     # 启动钉钉 Stream 客户端
@@ -325,19 +378,47 @@ def main() -> int:
     # 优先级: 命令行参数 > 配置文件
     start_webui = (args.webui or args.webui_only or config.webui_enabled) and os.getenv("GITHUB_ACTIONS") != "true"
     
+    bot_clients_started = False
     if start_webui:
         try:
             from webui import run_server_in_thread
             run_server_in_thread(host=config.webui_host, port=config.webui_port)
-            start_bot_stream_clients(config)
+            bot_clients_started = True
         except Exception as e:
             logger.error(f"启动 WebUI 失败: {e}")
+    
+    # === 启动 FastAPI 服务 (如果启用) ===
+    start_serve = (args.serve or args.serve_only) and os.getenv("GITHUB_ACTIONS") != "true"
+    
+    if start_serve:
+        try:
+            start_api_server(host=args.host, port=args.port, config=config)
+            bot_clients_started = True
+        except Exception as e:
+            logger.error(f"启动 FastAPI 服务失败: {e}")
+    
+    if bot_clients_started:
+        start_bot_stream_clients(config)
     
     # === 仅 WebUI 模式：不自动执行分析 ===
     if args.webui_only:
         logger.info("模式: 仅 WebUI 服务")
         logger.info(f"WebUI 运行中: http://{config.webui_host}:{config.webui_port}")
         logger.info("通过 /analysis?code=xxx 接口手动触发分析")
+        logger.info("按 Ctrl+C 退出...")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("\n用户中断，程序退出")
+        return 0
+    
+    # === 仅 FastAPI 服务模式：不自动执行分析 ===
+    if args.serve_only:
+        logger.info("模式: 仅 FastAPI 服务")
+        logger.info(f"API 服务运行中: http://{args.host}:{args.port}")
+        logger.info("通过 /api/v1/analysis/stock/{code} 接口触发分析")
+        logger.info(f"API 文档: http://{args.host}:{args.port}/docs")
         logger.info("按 Ctrl+C 退出...")
         try:
             while True:
@@ -401,11 +482,12 @@ def main() -> int:
         
         logger.info("\n程序执行完成")
         
-        # 如果启用了 WebUI 且是非定时任务模式，保持程序运行以便访问 WebUI
-        if start_webui and not (args.schedule or config.schedule_enabled):
-            logger.info("WebUI 运行中 (按 Ctrl+C 退出)...")
+        # 如果启用了服务且是非定时任务模式，保持程序运行
+        keep_running = (start_webui or start_serve) and not (args.schedule or config.schedule_enabled)
+        if keep_running:
+            service_name = "API 服务" if start_serve else "WebUI"
+            logger.info(f"{service_name} 运行中 (按 Ctrl+C 退出)...")
             try:
-                # 简单的保持活跃循环
                 while True:
                     time.sleep(1)
             except KeyboardInterrupt:
