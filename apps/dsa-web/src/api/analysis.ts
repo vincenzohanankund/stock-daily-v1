@@ -6,7 +6,6 @@ import type {
   AnalysisReport,
   TaskStatus,
   TaskListResponse,
-  TaskInfo,
 } from '../types/analysis';
 
 // ============ API 接口 ============
@@ -113,13 +112,6 @@ export const analysisApi = {
     );
 
     const data = toCamelCase<TaskListResponse>(response.data);
-
-    // 确保 tasks 数组中的每个 TaskInfo 也被正确转换
-    if (data.tasks) {
-      data.tasks = data.tasks.map((task: Record<string, unknown>) =>
-        toCamelCase<TaskInfo>(task)
-      );
-    }
 
     return data;
   },
