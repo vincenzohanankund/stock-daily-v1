@@ -204,7 +204,9 @@ python main.py --webui-only  # 仅启动 WebUI
 
 > 详细说明请参考 [完整指南 - WebUI](docs/full-guide.md#本地-webui-管理界面)
 
-## 🧩 FastAPI 服务（可选）
+## 🧩 FastAPI Web 服务（可选）
+
+![img.png](sources/fastapi_server.png)
 
 ```bash
 cd ./apps/dsa-web            # 进入 React Web 目录
