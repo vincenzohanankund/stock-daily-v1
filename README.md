@@ -210,7 +210,8 @@ python main.py --webui-only  # 仅启动 WebUI
 
 ```bash
 cd ./apps/dsa-web            # 进入 React Web 目录
-npm install                  # 编译 React Web 页面 会在根目录生成 /static 文件夹
+npm install
+npm run build                # 编译 React Web 页面 会在根目录生成 /static 文件夹
 
 cd ../..                     # 返回项目根目录
 python main.py --serve       # 启动 FastAPI + 执行分析
