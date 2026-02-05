@@ -92,6 +92,28 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
   const isConnectedRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 使用 ref 存储回调，避免 SSE 连接因回调变化而频繁重连
+  const callbacksRef = useRef({
+    onTaskCreated,
+    onTaskStarted,
+    onTaskCompleted,
+    onTaskFailed,
+    onConnected,
+    onError,
+  });
+
+  // 每次渲染时更新回调 ref（确保事件处理使用最新回调）
+  useEffect(() => {
+    callbacksRef.current = {
+      onTaskCreated,
+      onTaskStarted,
+      onTaskCompleted,
+      onTaskFailed,
+      onConnected,
+      onError,
+    };
+  });
+
   // 将 snake_case 转换为 camelCase
   const toCamelCase = (data: Record<string, unknown>): TaskInfo => {
     return {
@@ -133,31 +155,31 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
     // 连接成功
     eventSource.addEventListener('connected', () => {
       isConnectedRef.current = true;
-      onConnected?.();
+      callbacksRef.current.onConnected?.();
     });
 
     // 任务创建
     eventSource.addEventListener('task_created', (e) => {
       const task = parseEventData(e.data);
-      if (task) onTaskCreated?.(task);
+      if (task) callbacksRef.current.onTaskCreated?.(task);
     });
 
     // 任务开始
     eventSource.addEventListener('task_started', (e) => {
       const task = parseEventData(e.data);
-      if (task) onTaskStarted?.(task);
+      if (task) callbacksRef.current.onTaskStarted?.(task);
     });
 
     // 任务完成
     eventSource.addEventListener('task_completed', (e) => {
       const task = parseEventData(e.data);
-      if (task) onTaskCompleted?.(task);
+      if (task) callbacksRef.current.onTaskCompleted?.(task);
     });
 
     // 任务失败
     eventSource.addEventListener('task_failed', (e) => {
       const task = parseEventData(e.data);
-      if (task) onTaskFailed?.(task);
+      if (task) callbacksRef.current.onTaskFailed?.(task);
     });
 
     // 心跳 - 仅用于保持连接
@@ -168,7 +190,7 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
     // 错误处理
     eventSource.onerror = (error) => {
       isConnectedRef.current = false;
-      onError?.(error);
+      callbacksRef.current.onError?.(error);
 
       // 自动重连
       if (autoReconnect && enabled) {
@@ -179,12 +201,6 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
       }
     };
   }, [
-    onConnected,
-    onTaskCreated,
-    onTaskStarted,
-    onTaskCompleted,
-    onTaskFailed,
-    onError,
     autoReconnect,
     reconnectDelay,
     enabled,
