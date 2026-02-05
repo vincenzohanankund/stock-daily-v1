@@ -41,83 +41,17 @@ import sys
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List, Optional
-from src.feishu_doc import FeishuDocManager
 
 from src.config import get_config, Config
+from src.feishu_doc import FeishuDocManager
+from src.logging_config import setup_logging
 from src.notification import NotificationService
 from src.core.pipeline import StockAnalysisPipeline
 from src.core.market_review import run_market_review
 from src.search_service import SearchService
 from src.analyzer import GeminiAnalyzer
-
-# 配置日志格式
-LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s'
-LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-
-
-def setup_logging(debug: bool = False, log_dir: str = "./logs") -> None:
-    """
-    配置日志系统（同时输出到控制台和文件）
-    
-    Args:
-        debug: 是否启用调试模式
-        log_dir: 日志文件目录
-    """
-    level = logging.DEBUG if debug else logging.INFO
-    
-    # 创建日志目录
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
-    
-    # 日志文件路径（按日期分文件）
-    today_str = datetime.now().strftime('%Y%m%d')
-    log_file = log_path / f"stock_analysis_{today_str}.log"
-    debug_log_file = log_path / f"stock_analysis_debug_{today_str}.log"
-    
-    # 创建根 logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)  # 根 logger 设为 DEBUG，由 handler 控制输出级别
-    
-    # Handler 1: 控制台输出
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
-    root_logger.addHandler(console_handler)
-    
-    # Handler 2: 常规日志文件（INFO 级别，10MB 轮转）
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
-    root_logger.addHandler(file_handler)
-    
-    # Handler 3: 调试日志文件（DEBUG 级别，包含所有详细信息）
-    debug_handler = RotatingFileHandler(
-        debug_log_file,
-        maxBytes=50 * 1024 * 1024,  # 50MB
-        backupCount=3,
-        encoding='utf-8'
-    )
-    debug_handler.setLevel(logging.DEBUG)
-    debug_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
-    root_logger.addHandler(debug_handler)
-    
-    # 降低第三方库的日志级别
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('sqlalchemy').setLevel(logging.WARNING)
-    logging.getLogger('google').setLevel(logging.WARNING)
-    logging.getLogger('httpx').setLevel(logging.WARNING)
-    
-    logging.info(f"日志系统初始化完成，日志目录: {log_path.absolute()}")
-    logging.info(f"常规日志: {log_file}")
-    logging.info(f"调试日志: {debug_log_file}")
 
 
 logger = logging.getLogger(__name__)
@@ -140,68 +74,68 @@ def parse_arguments() -> argparse.Namespace:
   python main.py --market-review    # 仅运行大盘复盘
         '''
     )
-    
+
     parser.add_argument(
         '--debug',
         action='store_true',
         help='启用调试模式，输出详细日志'
     )
-    
+
     parser.add_argument(
         '--dry-run',
         action='store_true',
         help='仅获取数据，不进行 AI 分析'
     )
-    
+
     parser.add_argument(
         '--stocks',
         type=str,
         help='指定要分析的股票代码，逗号分隔（覆盖配置文件）'
     )
-    
+
     parser.add_argument(
         '--no-notify',
         action='store_true',
         help='不发送推送通知'
     )
-    
+
     parser.add_argument(
         '--single-notify',
         action='store_true',
         help='启用单股推送模式：每分析完一只股票立即推送，而不是汇总推送'
     )
-    
+
     parser.add_argument(
         '--workers',
         type=int,
         default=None,
         help='并发线程数（默认使用配置值）'
     )
-    
+
     parser.add_argument(
         '--schedule',
         action='store_true',
         help='启用定时任务模式，每日定时执行'
     )
-    
+
     parser.add_argument(
         '--market-review',
         action='store_true',
         help='仅运行大盘复盘分析'
     )
-    
+
     parser.add_argument(
         '--no-market-review',
         action='store_true',
         help='跳过大盘复盘分析'
     )
-    
+
     parser.add_argument(
         '--webui',
         action='store_true',
         help='启动本地配置 WebUI'
     )
-    
+
     parser.add_argument(
         '--webui-only',
         action='store_true',
@@ -213,7 +147,7 @@ def parse_arguments() -> argparse.Namespace:
         action='store_true',
         help='不保存分析上下文快照'
     )
-    
+
     return parser.parse_args()
 
 
@@ -224,14 +158,14 @@ def run_full_analysis(
 ):
     """
     执行完整的分析流程（个股 + 大盘复盘）
-    
+
     这是定时任务调用的主函数
     """
     try:
         # 命令行参数 --single-notify 覆盖配置（#55）
         if getattr(args, 'single_notify', False):
             config.single_stock_notify = True
-        
+
         # 创建调度器
         save_context_snapshot = None
         if getattr(args, 'no_context_snapshot', False):
@@ -244,7 +178,7 @@ def run_full_analysis(
             query_source="cli",
             save_context_snapshot=save_context_snapshot
         )
-        
+
         # 1. 运行个股分析
         results = pipeline.run(
             stock_codes=stock_codes,
@@ -271,7 +205,7 @@ def run_full_analysis(
             # 如果有结果，赋值给 market_report 用于后续飞书文档生成
             if review_result:
                 market_report = review_result
-        
+
         # 输出摘要
         if results:
             logger.info("\n===== 分析结果摘要 =====")
@@ -281,7 +215,7 @@ def run_full_analysis(
                     f"{emoji} {r.name}({r.code}): {r.operation_advice} | "
                     f"评分 {r.sentiment_score} | {r.trend_prediction}"
                 )
-        
+
         logger.info("\n任务执行完成")
 
         # === 新增：生成飞书云文档 ===
@@ -317,7 +251,7 @@ def run_full_analysis(
 
         except Exception as e:
             logger.error(f"飞书文档生成失败: {e}")
-        
+
     except Exception as e:
         logger.exception(f"分析流程执行失败: {e}")
 
@@ -358,18 +292,18 @@ def start_bot_stream_clients(config: Config) -> None:
 def main() -> int:
     """
     主入口函数
-    
+
     Returns:
         退出码（0 表示成功）
     """
     # 解析命令行参数
     args = parse_arguments()
-    
+
     # 加载配置（在设置日志前加载，以获取日志目录）
     config = get_config()
-    
+
     # 配置日志（输出到控制台和文件）
-    setup_logging(debug=args.debug, log_dir=config.log_dir)
+    setup_logging(log_prefix="stock_analysis", debug=args.debug, log_dir=config.log_dir)
     
     logger.info("=" * 60)
     logger.info("A股自选股智能分析系统 启动")
