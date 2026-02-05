@@ -46,9 +46,9 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
                     {meta.stockName || meta.stockCode}
                   </h2>
                   {/* 价格和涨跌幅 */}
-                  {meta.currentPrice !== undefined && (
+                  {meta.currentPrice != null && (
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold font-mono text-white">
+                      <span className={`text-xl font-bold font-mono ${getPriceChangeColor(meta.changePct)}`}>
                         {meta.currentPrice.toFixed(2)}
                       </span>
                       <span className={`text-sm font-semibold font-mono ${getPriceChangeColor(meta.changePct)}`}>

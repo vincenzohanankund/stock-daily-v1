@@ -124,6 +124,8 @@ class AnalysisService:
                 "stock_code": result.code,
                 "stock_name": result.name,
                 "report_type": "detailed",
+                "current_price": result.current_price,
+                "change_pct": result.change_pct,
             },
             "summary": {
                 "analysis_summary": result.analysis_summary,
