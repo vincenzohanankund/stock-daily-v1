@@ -218,7 +218,7 @@ python main.py --serve-only  # 仅启动 FastAPI
 python main.py --serve-only --host 0.0.0.0 --port 8000  # 指定启动端口
 ```
 
-访问 `http://127.0.0.1:8000/docs` 查看 API 文档。
+访问 `http://127.0.0.1:8000` 即可使用该页面（注意一定要执行 `npm install` 步骤，否则没有页面）
 
 也可以使用下面命令单独启动：
 
