@@ -72,5 +72,5 @@ verify_*.py
 .claude/
 CLAUDE.md
 
-# ignore .static files
+# ignore static files
 static/
