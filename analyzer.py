@@ -67,7 +67,6 @@ class AnalysisResult:
     
     # ========== 核心指标 ==========
     sentiment_score: int  # 综合评分 0-100 (>70强烈看多, >60看多, 40-60震荡, <40看空)
-    peg: int  # 1正常估值，大于1高估，小于1低估
     trend_prediction: str  # 趋势预测：强烈看多/看多/震荡/看空/强烈看空
     operation_advice: str  # 操作建议：买入/加仓/持有/减仓/卖出/观望
     confidence_level: str = "中"  # 置信度：高/中/低
@@ -227,6 +226,7 @@ class GeminiAnalyzer:
 - 乖离率 < 2%：最佳买点区间
 - 乖离率 2-5%：可小仓介入
 - 乖离率 > 5%：严禁追高！直接判定为"观望"
+- 需要考虑一下当前股票的PE，PB以及对应的PEB
 
 ### 2. 趋势交易（顺势而为）
 - **多头排列必须条件**：MA5 > MA10 > MA20
@@ -251,9 +251,6 @@ class GeminiAnalyzer:
 - 行业政策利空
 - 大额解禁
 
-### 6. 计算PEG
-- 根据PE和PB计算出对应的PEG
-- PEG=PE/PB计算出PEG为1位正常估值，大于1高估，小于1低估
 
 ## 输出格式：决策仪表盘 JSON
 
@@ -265,7 +262,6 @@ class GeminiAnalyzer:
     "trend_prediction": "强烈看多/看多/震荡/看空/强烈看空",
     "operation_advice": "买入/加仓/持有/减仓/卖出/观望",
     "confidence_level": "高/中/低",
-    “PEG”: 1,
     
     "dashboard": {
         "core_conclusion": {
