@@ -13,6 +13,7 @@ from sqlalchemy import and_, select
 from src.config import get_config
 from src.core.backtest_engine import OVERALL_SENTINEL_CODE, BacktestEngine, EvaluationConfig
 from src.repositories.backtest_repo import BacktestRepository
+from src.repositories.stock_repo import StockRepository
 from src.storage import BacktestResult, BacktestSummary, DatabaseManager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class BacktestService:
     def __init__(self, db_manager: Optional[DatabaseManager] = None):
         self.db = db_manager or DatabaseManager.get_instance()
         self.repo = BacktestRepository(self.db)
+        self.stock_repo = StockRepository(self.db)
 
     def run_backtest(
         self,
@@ -87,11 +89,11 @@ class BacktestService:
                         )
                     )
                     continue
-                start_daily = self.repo.get_start_daily(code=analysis.code, analysis_date=analysis_date)
+                start_daily = self.stock_repo.get_start_daily(code=analysis.code, analysis_date=analysis_date)
 
                 if start_daily is None or start_daily.close is None:
                     self._try_fill_daily_data(code=analysis.code, analysis_date=analysis_date, eval_window_days=eval_window_days)
-                    start_daily = self.repo.get_start_daily(code=analysis.code, analysis_date=analysis_date)
+                    start_daily = self.stock_repo.get_start_daily(code=analysis.code, analysis_date=analysis_date)
 
                 if start_daily is None or start_daily.close is None:
                     insufficient += 1
@@ -109,7 +111,7 @@ class BacktestService:
                     )
                     continue
 
-                forward_bars = self.repo.get_forward_bars(
+                forward_bars = self.stock_repo.get_forward_bars(
                     code=analysis.code,
                     analysis_date=start_daily.date,
                     eval_window_days=int(eval_window_days),
@@ -117,7 +119,7 @@ class BacktestService:
 
                 if len(forward_bars) < int(eval_window_days):
                     self._try_fill_daily_data(code=analysis.code, analysis_date=start_daily.date, eval_window_days=eval_window_days)
-                    forward_bars = self.repo.get_forward_bars(
+                    forward_bars = self.stock_repo.get_forward_bars(
                         code=analysis.code,
                         analysis_date=start_daily.date,
                         eval_window_days=int(eval_window_days),
