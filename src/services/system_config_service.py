@@ -184,6 +184,11 @@ class SystemConfigService:
         issues: List[Dict[str, Any]] = []
         data_type = field_schema.get("data_type", "string")
         validation = field_schema.get("validation", {}) or {}
+        is_required = field_schema.get("is_required", False)
+
+        # Empty values are valid for non-required fields (skip type validation)
+        if not value.strip() and not is_required:
+            return issues
 
         if "\n" in value:
             issues.append(
