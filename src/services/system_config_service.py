@@ -137,7 +137,7 @@ class SystemConfigService:
         if reload_now:
             try:
                 Config.reset_instance()
-                setup_env()
+                setup_env(override=True)
                 config = Config.get_instance()
                 warnings = config.validate()
                 reload_triggered = True
