@@ -20,6 +20,16 @@ type SaveResult = {
   issues?: ConfigValidationIssue[];
 };
 
+const CATEGORY_DISPLAY_ORDER: Record<string, number> = {
+  base: 10,
+  ai_model: 20,
+  data_source: 30,
+  notification: 40,
+  system: 50,
+  backtest: 60,
+  uncategorized: 99,
+};
+
 function sortItemsByOrder(items: SystemConfigItem[]): SystemConfigItem[] {
   return [...items].sort((a, b) => {
     const left = a.schema?.displayOrder ?? 9999;
@@ -80,7 +90,7 @@ export function useSystemConfig() {
           category,
           title: category.replace('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
           description: '',
-          displayOrder: item.schema.displayOrder,
+          displayOrder: CATEGORY_DISPLAY_ORDER[category] ?? 999,
           fields: [],
         });
       }
