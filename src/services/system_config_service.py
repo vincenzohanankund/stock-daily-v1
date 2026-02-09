@@ -9,7 +9,12 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from src.config import Config, setup_env
 from src.core.config_manager import ConfigManager
-from src.core.config_registry import build_schema_response, get_category_definitions, get_field_definition
+from src.core.config_registry import (
+    build_schema_response,
+    get_category_definitions,
+    get_field_definition,
+    get_registered_field_keys,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +48,23 @@ class SystemConfigService:
     def get_config(self, include_schema: bool = True, mask_token: str = "******") -> Dict[str, Any]:
         """Return current config values without server-side secret masking."""
         config_map = self._manager.read_config_map()
+        registered_keys = set(get_registered_field_keys())
+        all_keys = set(config_map.keys()) | registered_keys
+
         category_orders = {
             item["category"]: item["display_order"]
             for item in get_category_definitions()
         }
 
+        schema_by_key: Dict[str, Dict[str, Any]] = {
+            key: get_field_definition(key, config_map.get(key, ""))
+            for key in all_keys
+        }
+
         items: List[Dict[str, Any]] = []
-        for key, raw_value in config_map.items():
-            field_schema = get_field_definition(key, raw_value)
+        for key in all_keys:
+            raw_value = config_map.get(key, "")
+            field_schema = schema_by_key[key]
             item: Dict[str, Any] = {
                 "key": key,
                 "value": raw_value,
@@ -63,8 +77,8 @@ class SystemConfigService:
 
         items.sort(
             key=lambda item: (
-                category_orders.get(item.get("schema", {}).get("category", "uncategorized"), 999),
-                item.get("schema", {}).get("display_order", 9999),
+                category_orders.get(schema_by_key[item["key"]].get("category", "uncategorized"), 999),
+                schema_by_key[item["key"]].get("display_order", 9999),
                 item["key"],
             )
         )
