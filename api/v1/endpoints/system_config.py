@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.deps import get_system_config_service
 from api.v1.schemas.common import ErrorResponse
 from api.v1.schemas.system_config import (
     SystemConfigConflictResponse,
@@ -38,10 +39,9 @@ router = APIRouter()
 )
 def get_system_config(
     include_schema: bool = Query(True, description="Whether to include schema metadata"),
+    service: SystemConfigService = Depends(get_system_config_service),
 ) -> SystemConfigResponse:
     """Load and return current system configuration."""
-    service = SystemConfigService()
-
     try:
         payload = service.get_config(include_schema=include_schema)
         return SystemConfigResponse.model_validate(payload)
@@ -68,10 +68,11 @@ def get_system_config(
     summary="Update system configuration",
     description="Update key-value pairs in .env. Mask token preserves existing secret values.",
 )
-def update_system_config(request: UpdateSystemConfigRequest) -> UpdateSystemConfigResponse:
+def update_system_config(
+    request: UpdateSystemConfigRequest,
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> UpdateSystemConfigResponse:
     """Validate and persist system configuration updates."""
-    service = SystemConfigService()
-
     try:
         payload = service.update(
             config_version=request.config_version,
@@ -119,10 +120,11 @@ def update_system_config(request: UpdateSystemConfigRequest) -> UpdateSystemConf
     summary="Validate system configuration",
     description="Validate submitted configuration values without writing to .env.",
 )
-def validate_system_config(request: ValidateSystemConfigRequest) -> ValidateSystemConfigResponse:
+def validate_system_config(
+    request: ValidateSystemConfigRequest,
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> ValidateSystemConfigResponse:
     """Run pre-save validation only."""
-    service = SystemConfigService()
-
     try:
         payload = service.validate(items=[item.model_dump() for item in request.items])
         return ValidateSystemConfigResponse.model_validate(payload)
@@ -147,10 +149,10 @@ def validate_system_config(request: ValidateSystemConfigRequest) -> ValidateSyst
     summary="Get system configuration schema",
     description="Return categorized field metadata used for dynamic settings form rendering.",
 )
-def get_system_config_schema() -> SystemConfigSchemaResponse:
+def get_system_config_schema(
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> SystemConfigSchemaResponse:
     """Return schema metadata for system configuration fields."""
-    service = SystemConfigService()
-
     try:
         payload = service.get_schema()
         return SystemConfigSchemaResponse.model_validate(payload)
