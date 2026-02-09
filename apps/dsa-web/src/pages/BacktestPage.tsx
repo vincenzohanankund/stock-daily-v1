@@ -162,11 +162,21 @@ const BacktestPage: React.FC = () => {
     }
   }, []);
 
-  // Initial load — no window filter so it picks up the latest summary
+  // Initial load — fetch performance first, then filter results by its window
   useEffect(() => {
-    fetchResults(1);
-    fetchPerformance();
-  }, [fetchResults, fetchPerformance]);
+    const init = async () => {
+      // Get latest performance (unfiltered returns most recent summary)
+      const overall = await backtestApi.getOverallPerformance();
+      setOverallPerf(overall);
+      // Use the summary's eval_window_days to filter results consistently
+      const windowDays = overall?.evalWindowDays;
+      if (windowDays && !evalDays) {
+        setEvalDays(String(windowDays));
+      }
+      fetchResults(1, undefined, windowDays);
+    };
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Run backtest
   const handleRun = async () => {
@@ -196,9 +206,10 @@ const BacktestPage: React.FC = () => {
   // Filter by code
   const handleFilter = () => {
     const code = codeFilter.trim() || undefined;
+    const windowDays = evalDays ? parseInt(evalDays, 10) : undefined;
     setCurrentPage(1);
-    fetchResults(1, code);
-    fetchPerformance(code);
+    fetchResults(1, code, windowDays);
+    fetchPerformance(code, windowDays);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -210,7 +221,8 @@ const BacktestPage: React.FC = () => {
   // Pagination
   const totalPages = Math.ceil(totalResults / pageSize);
   const handlePageChange = (page: number) => {
-    fetchResults(page, codeFilter.trim() || undefined);
+    const windowDays = evalDays ? parseInt(evalDays, 10) : undefined;
+    fetchResults(page, codeFilter.trim() || undefined, windowDays);
   };
 
   return (
