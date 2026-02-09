@@ -211,15 +211,16 @@ class BacktestService:
             "errors": errors,
         }
 
-    def get_recent_evaluations(self, *, code: Optional[str], limit: int = 50, page: int = 1) -> Dict[str, Any]:
+    def get_recent_evaluations(self, *, code: Optional[str], eval_window_days: Optional[int] = None, limit: int = 50, page: int = 1) -> Dict[str, Any]:
         offset = max(page - 1, 0) * limit
-        rows, total = self.repo.get_results_paginated(code=code, days=None, offset=offset, limit=limit)
+        rows, total = self.repo.get_results_paginated(code=code, eval_window_days=eval_window_days, days=None, offset=offset, limit=limit)
         items = [self._result_to_dict(r) for r in rows]
         return {"total": total, "page": page, "limit": limit, "items": items}
 
-    def get_summary(self, *, scope: str, code: Optional[str]) -> Optional[Dict[str, Any]]:
+    def get_summary(self, *, scope: str, code: Optional[str], eval_window_days: Optional[int] = None) -> Optional[Dict[str, Any]]:
         config = get_config()
-        eval_window_days = int(getattr(config, "backtest_eval_window_days", 10))
+        if eval_window_days is None:
+            eval_window_days = int(getattr(config, "backtest_eval_window_days", 10))
         engine_version = str(getattr(config, "backtest_engine_version", "v1"))
         lookup_code = OVERALL_SENTINEL_CODE if scope == "overall" else code
         summary = self.repo.get_summary(

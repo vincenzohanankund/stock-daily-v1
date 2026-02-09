@@ -96,6 +96,7 @@ class BacktestRepository:
         self,
         *,
         code: Optional[str],
+        eval_window_days: Optional[int] = None,
         days: Optional[int],
         offset: int,
         limit: int,
@@ -104,6 +105,8 @@ class BacktestRepository:
             conditions = []
             if code:
                 conditions.append(BacktestResult.code == code)
+            if eval_window_days is not None:
+                conditions.append(BacktestResult.eval_window_days == eval_window_days)
             if days:
                 cutoff = datetime.now() - timedelta(days=int(days))
                 conditions.append(BacktestResult.evaluated_at >= cutoff)
