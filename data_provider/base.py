@@ -203,7 +203,9 @@ class BaseFetcher(ABC):
         df['ma50'] = df['close'].rolling(window=50, min_periods=1).mean()
         df['ma120'] = df['close'].rolling(window=120, min_periods=1).mean()
         df['ma200'] = df['close'].rolling(window=200, min_periods=1).mean()
-        logging.warning(f"{df['close'].rolling(window=200, min_periods=1).mean()}200天线")
+        ma_value200 = df['close'].rolling(window=200, min_periods=1).mean()
+        logging.warning(f"{ma_value200}200天线")
+        logging.warning(f"{df['ma5']}均线 {df['ma120']}")
         logging.warning(f"{df['close'].rolling(window=5, min_periods=1).mean()}5天线")
         
         # 量比：当日成交量 / 5日平均成交量
