@@ -84,13 +84,13 @@ for module in "${hidden_imports[@]}"; do
 done
 
 pushd "${ROOT_DIR}" >/dev/null
-cmd=("${PYTHON_BIN}" -m PyInstaller --name stock_analysis --onefile --noconsole --add-data "static:static")
+cmd=("${PYTHON_BIN}" -m PyInstaller --name stock_analysis --onedir --noconsole --add-data "static:static")
 cmd+=("${hidden_import_args[@]}" "main.py")
 
 echo "Running: ${cmd[*]}"
 "${cmd[@]}"
 popd >/dev/null
 
-cp "${ROOT_DIR}/dist/stock_analysis" "${ROOT_DIR}/dist/backend/stock_analysis"
+cp -R "${ROOT_DIR}/dist/stock_analysis" "${ROOT_DIR}/dist/backend/stock_analysis"
 
 log "Backend build completed."

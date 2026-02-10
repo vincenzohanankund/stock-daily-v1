@@ -26,24 +26,17 @@
       {
         "from": "../../.env.example",
         "to": ".env.example"
-      }    ],
+      },
+      {
+        "from": "../../dist/backend/stock_analysis",
+        "to": "backend/stock_analysis"
+      }
+    ],
     "win": {
-      "target": "portable",
-      "extraResources": [
-        {
-          "from": "../../dist/backend/stock_analysis.exe",
-          "to": "backend/stock_analysis.exe"
-        }
-      ]
+      "target": "portable"
     },
     "mac": {
-      "target": "dmg",
-      "extraResources": [
-        {
-          "from": "../../dist/backend/stock_analysis",
-          "to": "backend/stock_analysis"
-        }
-      ]
+      "target": "dmg"
     }
   }
 }
