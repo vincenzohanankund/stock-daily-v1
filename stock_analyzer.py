@@ -219,6 +219,10 @@ class StockTrendAnalyzer:
             df['MA200'] = df['close'].rolling(window=200).mean()
         else:
             df['MA200'] = df['MA120']  # 数据不足时使用 MA120 替代
+        logging.warning(f"{df['ma200'][-10:]}200天线")
+        logging.warning(f"{df['ma5'][-10:]}均线")
+        logging.warning(f"{df['MA200'][-10:]}200天线")
+        logging.warning(f"{df['MA5'][-10:]}均线")
         return df
     
     def _analyze_trend(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
