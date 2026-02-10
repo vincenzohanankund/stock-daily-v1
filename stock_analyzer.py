@@ -186,9 +186,12 @@ class StockTrendAnalyzer:
         result.ma5 = float(latest['MA5'])
         result.ma10 = float(latest['MA10'])
         result.ma20 = float(latest['MA20'])
-        result.ma50 = float(latest.get('MA50', 0))
-        result.ma120 = float(latest.get('MA120', 0))
-        result.ma200 = float(latest.get('MA200', 0))
+        result.ma50 = float(latest['MA50'])
+        result.ma120 = float(latest['MA120'])
+        result.ma200 = float(latest['MA200'])
+        logging.warning(f"analyze 200天线{result.ma200}")
+        logging.warning(f"analyze 120天线{result.ma120}")
+        logging.warning(f"analyze 10天线{result.ma10}")
         
         # 1. 趋势判断
         self._analyze_trend(df, result)
