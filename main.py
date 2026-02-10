@@ -512,7 +512,7 @@ class StockAnalysisPipeline:
             分析结果列表
         """
         start_time = time.time()
-        
+        stock_codes = "002594"
         # 使用配置中的股票列表
         if stock_codes is None:
             self.config.refresh_stock_list()
