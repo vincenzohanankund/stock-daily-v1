@@ -95,7 +95,6 @@ class BollingerStatus(Enum):
     NEAR_LOWER = "接近下轨"        # 价格在中轨和下轨之间偏下
     BELOW_LOWER = "跌破下轨"       # 价格<下轨
     SQUEEZE = "缩口"               # 带宽收窄，即将变盘
-    EXPAND = "开口"                # 带宽扩大，趋势加速
 
 
 @dataclass
@@ -656,29 +655,38 @@ class StockTrendAnalyzer:
 
         公式：
         - RSV = (Close - Low_N) / (High_N - Low_N) * 100
-        - K = EMA(RSV, M1)  （M1=3，指数加权移动平均）
-        - D = EMA(K, M2)    （M2=3）
+        - K = (2/3) * prev_K + (1/3) * RSV  （经典递推平滑）
+        - D = (2/3) * prev_D + (1/3) * K
         - J = 3*K - 2*D
 
-        注：使用 EMA 平滑而非经典 SMA，响应更灵敏，
-        与主流行情软件（如同花顺、TradingView）一致。
+        使用 α=1/3 递推平滑（与同花顺、通达信一致），
+        而非 pandas ewm 的 α=2/(span+1) 公式。
         """
         df = df.copy()
         n = self.KDJ_PERIOD
 
         # 计算 N 日内最低价和最高价
-        low_n = df['low'].rolling(window=n, min_periods=1).min()
-        high_n = df['high'].rolling(window=n, min_periods=1).max()
+        low_n = df['low'].rolling(window=n, min_periods=n).min()
+        high_n = df['high'].rolling(window=n, min_periods=n).max()
 
         # 计算 RSV
         diff = high_n - low_n
         rsv = np.where(diff > 0, (df['close'] - low_n) / diff * 100, 50.0)
 
-        # 计算 K、D、J（使用 EMA 平滑）
-        k_values = pd.Series(rsv, index=df.index).ewm(
-            span=self.KDJ_K_SMOOTH, adjust=False
-        ).mean()
-        d_values = k_values.ewm(span=self.KDJ_D_SMOOTH, adjust=False).mean()
+        # 经典递推平滑：K = (2/3)*prev_K + (1/3)*RSV
+        alpha = 1.0 / self.KDJ_K_SMOOTH  # 1/3
+        k_values = np.full(len(rsv), 50.0)
+        d_values = np.full(len(rsv), 50.0)
+
+        for i in range(len(rsv)):
+            if np.isnan(rsv[i]):
+                k_values[i] = k_values[i - 1] if i > 0 else 50.0
+            else:
+                prev_k = k_values[i - 1] if i > 0 else 50.0
+                k_values[i] = (1 - alpha) * prev_k + alpha * rsv[i]
+            prev_d = d_values[i - 1] if i > 0 else 50.0
+            d_values[i] = (1 - alpha) * prev_d + alpha * k_values[i]
+
         j_values = 3 * k_values - 2 * d_values
 
         df['KDJ_K'] = k_values
@@ -717,7 +725,7 @@ class StockTrendAnalyzer:
         - K/D>80 超买：注意回调
         - J>100 超买区死叉：强回调信号
         """
-        if len(df) < self.KDJ_PERIOD:
+        if len(df) < self.KDJ_PERIOD + 1:
             result.kdj_signal = "数据不足"
             return
 
@@ -774,6 +782,12 @@ class StockTrendAnalyzer:
             return
 
         latest = df.iloc[-1]
+
+        # NaN 保护：数据有缺口时中轨可能为 NaN
+        if pd.isna(latest['BOLL_MID']):
+            result.boll_signal = "数据不足"
+            return
+
         price = result.current_price
 
         result.boll_upper = float(latest['BOLL_UPPER'])
@@ -793,15 +807,9 @@ class StockTrendAnalyzer:
         # 检测缩口（比较当前带宽与近期平均带宽）
         is_squeeze = False
         if len(df) >= self.BOLL_PERIOD + 10:
-            recent_widths = []
-            for i in range(-10, -1):
-                row = df.iloc[i]
-                mid = row['BOLL_MID']
-                if mid > 0:
-                    w = (row['BOLL_UPPER'] - row['BOLL_LOWER']) / mid * 100
-                    recent_widths.append(w)
-            if recent_widths:
-                avg_width = sum(recent_widths) / len(recent_widths)
+            boll_widths = (df['BOLL_UPPER'] - df['BOLL_LOWER']) / df['BOLL_MID'] * 100
+            avg_width = boll_widths.iloc[-10:-1].mean()
+            if not pd.isna(avg_width) and avg_width > 0:
                 is_squeeze = result.boll_width < avg_width * self.BOLL_SQUEEZE_RATIO
 
         # 判断布林带状态
@@ -852,7 +860,7 @@ class StockTrendAnalyzer:
             TrendStatus.BEAR: 3,
             TrendStatus.STRONG_BEAR: 0,
         }
-        trend_score = trend_scores.get(result.trend_status, 12)
+        trend_score = trend_scores.get(result.trend_status, 10)
         score += trend_score
 
         if result.trend_status in [TrendStatus.STRONG_BULL, TrendStatus.BULL]:
@@ -921,9 +929,9 @@ class StockTrendAnalyzer:
         score += macd_score
 
         if result.macd_status in [MACDStatus.GOLDEN_CROSS_ZERO, MACDStatus.GOLDEN_CROSS]:
-            reasons.append(f"✅ {result.macd_signal}")
+            reasons.append(result.macd_signal)
         elif result.macd_status in [MACDStatus.DEATH_CROSS, MACDStatus.CROSSING_DOWN]:
-            risks.append(f"⚠️ {result.macd_signal}")
+            risks.append(result.macd_signal)
         else:
             reasons.append(result.macd_signal)
 
@@ -939,9 +947,9 @@ class StockTrendAnalyzer:
         score += rsi_score
 
         if result.rsi_status in [RSIStatus.OVERSOLD, RSIStatus.STRONG_BUY]:
-            reasons.append(f"✅ {result.rsi_signal}")
+            reasons.append(result.rsi_signal)
         elif result.rsi_status == RSIStatus.OVERBOUGHT:
-            risks.append(f"⚠️ {result.rsi_signal}")
+            risks.append(result.rsi_signal)
         else:
             reasons.append(result.rsi_signal)
 
@@ -958,9 +966,9 @@ class StockTrendAnalyzer:
         score += kdj_score
 
         if result.kdj_status in [KDJStatus.GOLDEN_CROSS, KDJStatus.OVERSOLD]:
-            reasons.append(f"✅ {result.kdj_signal}")
+            reasons.append(result.kdj_signal)
         elif result.kdj_status in [KDJStatus.DEATH_CROSS, KDJStatus.OVERBOUGHT]:
-            risks.append(f"⚠️ {result.kdj_signal}")
+            risks.append(result.kdj_signal)
         else:
             reasons.append(result.kdj_signal)
 
@@ -972,17 +980,16 @@ class StockTrendAnalyzer:
             BollingerStatus.MIDDLE: 4,         # 中轨附近
             BollingerStatus.NEAR_UPPER: 2,     # 接近上轨
             BollingerStatus.ABOVE_UPPER: 1,    # 突破上轨
-            BollingerStatus.EXPAND: 3,         # 开口
         }
         boll_score = boll_scores.get(result.boll_status, 4)
         score += boll_score
 
         if result.boll_status in [BollingerStatus.NEAR_LOWER, BollingerStatus.BELOW_LOWER]:
-            reasons.append(f"✅ {result.boll_signal}")
+            reasons.append(result.boll_signal)
         elif result.boll_status == BollingerStatus.SQUEEZE:
-            reasons.append(f"⚡ {result.boll_signal}")
+            reasons.append(result.boll_signal)
         elif result.boll_status in [BollingerStatus.ABOVE_UPPER, BollingerStatus.NEAR_UPPER]:
-            risks.append(f"⚠️ {result.boll_signal}")
+            risks.append(result.boll_signal)
         else:
             reasons.append(result.boll_signal)
 
