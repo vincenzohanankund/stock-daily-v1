@@ -559,7 +559,7 @@ class NotificationService:
                 price_data = data_persp.get('price_position', {})
                 vol_data = data_persp.get('volume_analysis', {})
                 chip_data = data_persp.get('chip_structure', {})
-                
+                logger.warn(f"price position {price_data}")
                 report_lines.extend([
                     "### 📊 数据透视",
                     "",
@@ -575,6 +575,7 @@ class NotificationService:
                 
                 # 价格位置
                 if price_data:
+                    logger.warn(f"price position {price_data}")
                     bias_status = price_data.get('bias_status', 'N/A')
                     bias_emoji = "✅" if bias_status == "安全" else ("⚠️" if bias_status == "警戒" else "🚨")
                     report_lines.extend([
