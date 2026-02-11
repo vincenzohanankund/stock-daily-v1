@@ -258,7 +258,7 @@ class StockTrendAnalyzer:
     # 布林带参数（标准20/2）
     BOLL_PERIOD = 20            # 中轨周期
     BOLL_STD_DEV = 2            # 标准差倍数
-    BOLL_SQUEEZE_THRESHOLD = 5  # 缩口阈值（带宽%）
+    BOLL_SQUEEZE_RATIO = 0.7    # 缩口判断：当前带宽 < 近期均值 * 此比例视为缩口
     
     def __init__(self):
         """初始化分析器"""
@@ -656,9 +656,12 @@ class StockTrendAnalyzer:
 
         公式：
         - RSV = (Close - Low_N) / (High_N - Low_N) * 100
-        - K = SMA(RSV, M1)  （M1=3）
-        - D = SMA(K, M2)    （M2=3）
+        - K = EMA(RSV, M1)  （M1=3，指数加权移动平均）
+        - D = EMA(K, M2)    （M2=3）
         - J = 3*K - 2*D
+
+        注：使用 EMA 平滑而非经典 SMA，响应更灵敏，
+        与主流行情软件（如同花顺、TradingView）一致。
         """
         df = df.copy()
         n = self.KDJ_PERIOD
@@ -697,8 +700,8 @@ class StockTrendAnalyzer:
         n = self.BOLL_PERIOD
         k = self.BOLL_STD_DEV
 
-        df['BOLL_MID'] = df['close'].rolling(window=n).mean()
-        std = df['close'].rolling(window=n).std()
+        df['BOLL_MID'] = df['close'].rolling(window=n, min_periods=n).mean()
+        std = df['close'].rolling(window=n, min_periods=n).std()
         df['BOLL_UPPER'] = df['BOLL_MID'] + k * std
         df['BOLL_LOWER'] = df['BOLL_MID'] - k * std
 
@@ -799,7 +802,7 @@ class StockTrendAnalyzer:
                     recent_widths.append(w)
             if recent_widths:
                 avg_width = sum(recent_widths) / len(recent_widths)
-                is_squeeze = result.boll_width < avg_width * 0.7
+                is_squeeze = result.boll_width < avg_width * self.BOLL_SQUEEZE_RATIO
 
         # 判断布林带状态
         if price > result.boll_upper:
