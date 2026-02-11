@@ -1080,6 +1080,10 @@ class GeminiAnalyzer:
 | 量能状态 | {trend.get('volume_status', '未知')} | {trend.get('volume_trend', '')} |
 | 系统信号 | {trend.get('buy_signal', '未知')} | |
 | 系统评分 | {trend.get('signal_score', 0)}/100 | |
+| **MACD** | **{trend.get('macd_status', '未知')}** | {trend.get('macd_signal', '')} |
+| **RSI(12)** | **{trend.get('rsi_12', 'N/A')}** | {trend.get('rsi_signal', '')} |
+| **KDJ** | **K={trend.get('kdj_k', 'N/A'):.1f} D={trend.get('kdj_d', 'N/A'):.1f} J={trend.get('kdj_j', 'N/A'):.1f}** | {trend.get('kdj_signal', '')} |
+| **布林带** | **{trend.get('boll_status', '未知')}** | 带宽{trend.get('boll_width', 0):.1f}% 位置{trend.get('boll_position', 0):.0f}% |
 
 #### 系统分析理由
 **买入理由**：
