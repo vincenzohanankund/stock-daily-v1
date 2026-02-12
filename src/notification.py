@@ -46,6 +46,10 @@ from bot.models import BotMessage
 logger = logging.getLogger(__name__)
 
 
+# WeChat Work image msgtype limit ~2MB (base64 payload)
+WECHAT_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+
+
 class NotificationChannel(Enum):
     """通知渠道类型"""
     WECHAT = "wechat"      # 企业微信
@@ -1354,6 +1358,12 @@ class NotificationService:
     def _send_wechat_image(self, image_bytes: bytes) -> bool:
         """Send image via WeChat Work webhook msgtype image (Issue #289)."""
         if not self._wechat_url:
+            return False
+        if len(image_bytes) > WECHAT_IMAGE_MAX_BYTES:
+            logger.warning(
+                "企业微信图片超限 (%d > %d bytes)，拒绝发送，调用方应 fallback 为文本",
+                len(image_bytes), WECHAT_IMAGE_MAX_BYTES,
+            )
             return False
         try:
             b64 = base64.b64encode(image_bytes).decode("ascii")
@@ -3150,7 +3160,27 @@ class NotificationService:
         except Exception as e:
             logger.error(f"AstrBot 发送异常: {e}")
             return False
-    
+
+    def _should_use_image_for_channel(
+        self, channel: NotificationChannel, image_bytes: Optional[bytes]
+    ) -> bool:
+        """
+        Decide whether to send as image for the given channel (Issue #289).
+
+        Fallback rules (send as Markdown text instead of image):
+        - image_bytes is None: conversion failed / imgkit not installed / content over max_chars
+        - WeChat: image exceeds ~2MB limit
+        """
+        if channel.value not in self._markdown_to_image_channels or image_bytes is None:
+            return False
+        if channel == NotificationChannel.WECHAT and len(image_bytes) > WECHAT_IMAGE_MAX_BYTES:
+            logger.warning(
+                "企业微信图片超限 (%d bytes)，回退为 Markdown 文本发送",
+                len(image_bytes),
+            )
+            return False
+        return True
+
     def send(
         self,
         content: str,
@@ -3159,14 +3189,20 @@ class NotificationService:
     ) -> bool:
         """
         统一发送接口 - 向所有已配置的渠道发送
-        
+
         遍历所有已配置的渠道，逐一发送消息
-        
+
+        Fallback rules (Markdown-to-image, Issue #289):
+        - When image_bytes is None (conversion failed / imgkit not installed /
+          content over max_chars): all channels configured for image will send
+          as Markdown text instead.
+        - When WeChat image exceeds ~2MB: that channel falls back to Markdown text.
+
         Args:
             content: 消息内容（Markdown 格式）
             email_stock_codes: 股票代码列表（可选，用于邮件渠道路由到对应分组邮箱，Issue #268）
             email_send_to_all: 邮件是否发往所有配置邮箱（用于大盘复盘等无股票归属的内容）
-            
+
         Returns:
             是否至少有一个渠道发送成功
         """
@@ -3179,7 +3215,8 @@ class NotificationService:
             logger.warning("通知服务不可用，跳过推送")
             return False
 
-        # Markdown to image (Issue #289): convert once if any channel needs it
+        # Markdown to image (Issue #289): convert once if any channel needs it.
+        # Per-channel decision via _should_use_image_for_channel (see send() docstring for fallback rules).
         image_bytes = None
         channels_needing_image = {
             ch for ch in self._available_channels
@@ -3204,10 +3241,7 @@ class NotificationService:
 
         for channel in self._available_channels:
             channel_name = ChannelDetector.get_channel_name(channel)
-            use_image = (
-                channel.value in self._markdown_to_image_channels
-                and image_bytes is not None
-            )
+            use_image = self._should_use_image_for_channel(channel, image_bytes)
             try:
                 if channel == NotificationChannel.WECHAT:
                     if use_image:
