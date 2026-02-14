@@ -310,17 +310,17 @@ class AnalysisResult:
         return star_map.get(self.confidence_level, '⭐⭐')
 
 
-class GeminiAnalyzer:
+class LLMAnalyzer:
     """
-    Gemini AI 分析器
+    LLM 股票分析器（支持 Gemini / Anthropic / OpenAI）
 
     职责：
-    1. 调用 Google Gemini API 进行股票分析
+    1. 调用 Vision/LLM API（Gemini 优先，备选 Anthropic、OpenAI）进行股票分析
     2. 结合预先搜索的新闻和技术面数据生成分析报告
     3. 解析 AI 返回的 JSON 格式结果
 
     使用方式：
-        analyzer = GeminiAnalyzer()
+        analyzer = LLMAnalyzer()
         result = analyzer.analyze(context, news_context)
     """
 
@@ -1601,9 +1601,9 @@ class GeminiAnalyzer:
 
 
 # 便捷函数
-def get_analyzer() -> GeminiAnalyzer:
-    """获取 Gemini 分析器实例"""
-    return GeminiAnalyzer()
+def get_analyzer() -> LLMAnalyzer:
+    """获取 LLM 分析器实例"""
+    return LLMAnalyzer()
 
 
 if __name__ == "__main__":
@@ -1632,11 +1632,11 @@ if __name__ == "__main__":
         'price_change_ratio': 1.5,
     }
     
-    analyzer = GeminiAnalyzer()
+    analyzer = LLMAnalyzer()
     
     if analyzer.is_available():
         print("=== AI 分析测试 ===")
         result = analyzer.analyze(test_context)
         print(f"分析结果: {result.to_dict()}")
     else:
-        print("Gemini API 未配置，跳过测试")
+        print("LLM API 未配置，跳过测试")
