@@ -10,18 +10,20 @@ export const stocksApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiClient.post<{ codes: string[]; raw_text?: string }>(
+    const headers: { [key: string]: string | undefined } = { 'Content-Type': undefined };
+    const response = await apiClient.post(
       '/api/v1/stocks/extract-from-image',
       formData,
       {
-        headers: { 'Content-Type': undefined } as Record<string, string | undefined },
+        headers,
         timeout: 60000, // Vision API can be slow; 60s
       },
     );
 
+    const data = response.data as { codes?: string[]; raw_text?: string };
     return {
-      codes: response.data.codes ?? [],
-      rawText: response.data.raw_text,
+      codes: data.codes ?? [],
+      rawText: data.raw_text,
     };
   },
 };
