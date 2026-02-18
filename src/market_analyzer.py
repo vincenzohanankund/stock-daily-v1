@@ -381,7 +381,7 @@ class MarketAnalyzer:
         return "\n".join(lines)
 
     def _build_indices_block(self, overview: MarketOverview) -> str:
-        """Build indices table block (without amplitude)."""
+        """构建指数行情表格（不含振幅）"""
         if not overview.indices:
             return ""
         lines = [
@@ -390,8 +390,14 @@ class MarketAnalyzer:
         for idx in overview.indices:
             arrow = "🔴" if idx.change_pct < 0 else "🟢" if idx.change_pct > 0 else "⚪"
             amount_raw = idx.amount or 0.0
-            amount_yi = amount_raw / 1e8 if amount_raw > 1e6 else amount_raw
-            lines.append(f"| {idx.name} | {idx.current:.2f} | {arrow} {idx.change_pct:+.2f}% | {amount_yi:.0f} |")
+            if amount_raw == 0.0:
+                # Yahoo Finance 不提供成交额，显示 N/A 避免误解
+                amount_str = "N/A"
+            elif amount_raw > 1e6:
+                amount_str = f"{amount_raw / 1e8:.0f}"
+            else:
+                amount_str = f"{amount_raw:.0f}"
+            lines.append(f"| {idx.name} | {idx.current:.2f} | {arrow} {idx.change_pct:+.2f}% | {amount_str} |")
         return "\n".join(lines)
 
     def _build_sector_block(self, overview: MarketOverview) -> str:

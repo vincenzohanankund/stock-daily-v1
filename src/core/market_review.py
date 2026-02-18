@@ -68,7 +68,7 @@ def run_market_review(
                 review_report = f"# A股大盘复盘\n\n{cn_report}"
             if us_report:
                 if review_report:
-                    review_report += "\n\n---\n\n"
+                    review_report += "\n\n---\n\n> 以下为美股大盘复盘\n\n"
                 review_report += f"# 美股大盘复盘\n\n{us_report}"
             if not review_report:
                 review_report = None
