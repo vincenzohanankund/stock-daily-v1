@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - 大盘复盘模块
+股票智能分析系统 - 大盘复盘模块（支持 A 股 / 美股）
 ===================================
 
 职责：
-1. 执行大盘复盘分析
-2. 生成复盘报告
+1. 根据 MARKET_REVIEW_REGION 配置选择市场区域（cn / us / both）
+2. 执行大盘复盘分析并生成复盘报告
 3. 保存和发送复盘报告
 """
 
@@ -59,7 +59,9 @@ def run_market_review(
             us_analyzer = MarketAnalyzer(
                 search_service=search_service, analyzer=analyzer, region='us'
             )
+            logger.info("生成 A 股大盘复盘报告...")
             cn_report = cn_analyzer.run_daily_review()
+            logger.info("生成美股大盘复盘报告...")
             us_report = us_analyzer.run_daily_review()
             review_report = ''
             if cn_report:
