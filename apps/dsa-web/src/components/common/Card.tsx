@@ -1,92 +1,46 @@
-import type React from 'react';
+import React from 'react';
 
-interface CardProps {
-  title?: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  className?: string;
-  variant?: 'default' | 'bordered' | 'gradient';
-  hoverable?: boolean;
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
+  title?: React.ReactNode;
+  extra?: React.ReactNode;
+  bordered?: boolean;
+  actions?: React.ReactNode[];
 }
 
-/**
- * 终端风格卡片组件
- * 支持渐变边框、悬浮效果
- */
 export const Card: React.FC<CardProps> = ({
-  title,
-  subtitle,
-  children,
   className = '',
-  variant = 'default',
-  hoverable = false,
-  padding = 'md',
+  title,
+  extra,
+  children,
+  bordered = true,
+  actions,
+  ...props
 }) => {
-  const paddingStyles = {
-    none: '',
-    sm: 'p-3',
-    md: 'p-4',
-    lg: 'p-5',
-  };
-
-  const baseStyles = 'rounded-2xl';
-
-  const variantStyles = {
-    default: 'terminal-card',
-    bordered: 'terminal-card terminal-card-hover',
-    gradient: 'gradient-border-card',
-  };
-
-  const hoverStyles = hoverable
-    ? 'terminal-card-hover cursor-pointer'
-    : '';
-
-  if (variant === 'gradient') {
-    return (
-      <div className={`${variantStyles.gradient} ${className}`}>
-        <div className={`gradient-border-card-inner ${paddingStyles[padding]}`}>
-          {(title || subtitle) && (
-            <div className="mb-3">
-              {subtitle && (
-                <span className="label-uppercase">{subtitle}</span>
-              )}
-              {title && (
-                <h3 className="text-lg font-semibold text-white mt-1">
-                  {title}
-                </h3>
-              )}
-            </div>
-          )}
-          {children}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
-      className={`
-        ${baseStyles}
-        ${variantStyles[variant]}
-        ${hoverStyles}
-        ${paddingStyles[padding]}
-        ${className}
-      `}
+      className={`bg-card text-card-foreground rounded-lg shadow-sm ${
+        bordered ? 'border border-border' : ''
+      } ${className}`}
+      {...props}
     >
-      {(title || subtitle) && (
-        <div className="mb-3">
-          {subtitle && (
-            <span className="label-uppercase">{subtitle}</span>
-          )}
-          {title && (
-            <h3 className="text-lg font-semibold text-white mt-1">
-              {title}
-            </h3>
-          )}
+      {(title || extra) && (
+        <div className="flex flex-col space-y-1.5 p-6 pb-2">
+          <div className="flex items-center justify-between">
+            {title && <div className="font-semibold leading-none tracking-tight">{title}</div>}
+            {extra && <div className="text-sm text-muted-foreground">{extra}</div>}
+          </div>
         </div>
       )}
-      {children}
+      <div className="p-6 pt-2">{children}</div>
+      {actions && (
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20 rounded-b-lg">
+          {actions.map((action, index) => (
+            <React.Fragment key={index}>{action}</React.Fragment>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+export default Card;

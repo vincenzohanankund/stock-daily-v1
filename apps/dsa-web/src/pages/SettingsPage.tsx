@@ -1,163 +1,210 @@
-import type React from 'react';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { Save, RefreshCw, Info, Settings, ChevronRight } from 'lucide-react';
 import { useSystemConfig } from '../hooks';
-import { SettingsAlert, SettingsField, SettingsLoading } from '../components/settings';
-import { getCategoryDescriptionZh, getCategoryTitleZh } from '../utils/systemConfigI18n';
+import { getCategoryDescriptionZh, getCategoryTitleZh, getFieldTitleZh, getFieldDescriptionZh } from '../utils/systemConfigI18n';
+import type { SystemConfigItem, SystemConfigFieldSchema, SystemConfigCategory } from '../types/systemConfig';
+
+import Input from '../components/common/Input';
+import Button from '../components/common/Button';
+import { Select } from '../components/common/Select';
+import { Switch } from '../components/common/Switch';
+import { Tooltip } from '../components/common/Tooltip';
+import { Label } from '../components/common/Label';
+import { Spinner } from '../components/common/Spinner';
+import { useToast } from '../components/common/Toast';
 
 const SettingsPage: React.FC = () => {
   const {
     categories,
     itemsByCategory,
-    issueByKey,
     activeCategory,
     setActiveCategory,
     hasDirty,
     dirtyCount,
-    toast,
-    clearToast,
     isLoading,
     isSaving,
     loadError,
     saveError,
-    retryAction,
     load,
-    retry,
     save,
     setDraftValue,
+    draftValues
   } = useSystemConfig();
 
+  const toast = useToast();
+
   useEffect(() => {
-    void load();
+    load();
   }, [load]);
 
   useEffect(() => {
-    if (!toast) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      clearToast();
-    }, 3200);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [clearToast, toast]);
+    if (loadError) toast.error(loadError);
+    if (saveError) toast.error(saveError);
+  }, [loadError, saveError, toast]);
 
   const activeItems = itemsByCategory[activeCategory] || [];
 
-  return (
-    <div className="min-h-screen px-4 pb-6 pt-4 md:px-6">
-      <header className="mb-4 rounded-2xl border border-white/8 bg-card/80 p-4 backdrop-blur-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-white">系统设置</h1>
-            <p className="text-sm text-secondary">
-              默认使用 .env 中的配置
-            </p>
-          </div>
+  const renderField = (item: SystemConfigItem) => {
+    const schema = (item.schema || {}) as SystemConfigFieldSchema;
+    const controlType = schema.uiControl || 'text';
+    const isEditable = schema.isEditable !== false;
+    const currentValue = draftValues[item.key] !== undefined ? draftValues[item.key] : item.value;
+    const description = getFieldDescriptionZh(item.key) || schema.description;
+    const title = getFieldTitleZh(item.key) || item.key;
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-secondary" onClick={() => void load()} disabled={isLoading || isSaving}>
-              重置
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => void save()}
-              disabled={!hasDirty || isSaving || isLoading}
-            >
-              {isSaving ? '保存中...' : `保存配置${dirtyCount ? ` (${dirtyCount})` : ''}`}
-            </button>
-          </div>
+    const handleChange = (val: any) => {
+      setDraftValue(item.key, String(val));
+    };
+
+    let inputNode;
+    if (controlType === 'switch') {
+      inputNode = (
+        <div className="flex items-center space-x-2">
+            <Switch
+            checked={currentValue === 'true'}
+            onChange={(checked) => handleChange(checked)}
+            disabled={!isEditable}
+            />
+            <span className="text-sm text-muted-foreground">{currentValue === 'true' ? '已启用' : '已禁用'}</span>
         </div>
-
-        {saveError ? (
-          <SettingsAlert
-            className="mt-3"
-            title="保存失败"
-            message={saveError}
-            actionLabel={retryAction === 'save' ? '重试保存' : undefined}
-            onAction={retryAction === 'save' ? () => void retry() : undefined}
-          />
-        ) : null}
-      </header>
-
-      {loadError ? (
-        <SettingsAlert
-          title="加载设置失败"
-          message={loadError}
-          actionLabel={retryAction === 'load' ? '重试加载' : '重新加载'}
-          onAction={() => void retry()}
-          className="mb-4"
+      );
+    } else if (controlType === 'select' && schema.options) {
+      inputNode = (
+        <Select
+          value={currentValue}
+          onChange={handleChange}
+          options={schema.options.map(opt => ({ value: opt, label: opt }))}
+          disabled={!isEditable}
+          className="w-full sm:w-[300px]"
         />
-      ) : null}
+      );
+    } else if (controlType === 'textarea') {
+      inputNode = (
+        <textarea
+          value={currentValue}
+          onChange={(e) => handleChange(e.target.value)}
+          disabled={!isEditable}
+          rows={4}
+          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+        />
+      );
+    } else if (controlType === 'password') {
+      inputNode = (
+        <Input
+          type="password"
+          value={currentValue}
+          onChange={(e) => handleChange(e.target.value)}
+          disabled={!isEditable}
+          className="max-w-md"
+        />
+      );
+    } else {
+      inputNode = (
+        <Input
+          value={currentValue}
+          onChange={(e) => handleChange(e.target.value)}
+          disabled={!isEditable}
+          className="max-w-md"
+        />
+      );
+    }
 
-      {isLoading ? (
-        <SettingsLoading />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-          <aside className="rounded-2xl border border-white/8 bg-card/60 p-3 backdrop-blur-sm">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted">配置分类</p>
-            <div className="space-y-2">
-              {categories.map((category) => {
-                const isActive = category.category === activeCategory;
-                const count = (itemsByCategory[category.category] || []).length;
-                const title = getCategoryTitleZh(category.category, category.title);
-                const description = getCategoryDescriptionZh(category.category, category.description);
-
-                return (
-                  <button
-                    key={category.category}
-                    type="button"
-                    className={`w-full rounded-lg border px-3 py-2 text-left transition ${
-                      isActive
-                        ? 'border-accent bg-cyan/10 text-white'
-                        : 'border-white/8 bg-elevated/40 text-secondary hover:border-white/16 hover:text-white'
-                    }`}
-                    onClick={() => setActiveCategory(category.category)}
-                  >
-                    <span className="flex items-center justify-between text-sm font-medium">
-                      {title}
-                      <span className="text-xs text-muted">{count}</span>
-                    </span>
-                    {description ? <span className="mt-1 block text-xs text-muted">{description}</span> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
-
-          <section className="space-y-3 rounded-2xl border border-white/8 bg-card/60 p-4 backdrop-blur-sm">
-            {activeItems.length ? (
-              activeItems.map((item) => (
-                <SettingsField
-                  key={item.key}
-                  item={item}
-                  value={item.value}
-                  disabled={isSaving}
-                  onChange={setDraftValue}
-                  issues={issueByKey[item.key] || []}
-                />
-              ))
-            ) : (
-              <div className="rounded-xl border border-white/8 bg-elevated/40 p-5 text-sm text-secondary">
-                当前分类下暂无配置项。
-              </div>
+    return (
+      <div key={item.key} className="space-y-3 pt-4 first:pt-0">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              {title}
+            </Label>
+            {description && (
+              <Tooltip content={description}>
+                <Info size={14} className="text-muted-foreground/70 cursor-help hover:text-foreground transition-colors" />
+              </Tooltip>
             )}
-          </section>
+          </div>
+          {description && <p className="text-[13px] text-muted-foreground leading-relaxed">{description}</p>}
         </div>
-      )}
+        {inputNode}
+      </div>
+    );
+  };
 
-      {toast ? (
-        <div className="fixed bottom-5 right-5 z-50 w-[320px] max-w-[calc(100vw-24px)]">
-          <SettingsAlert
-            title={toast.type === 'success' ? '操作成功' : '操作失败'}
-            message={toast.message}
-            variant={toast.type === 'success' ? 'success' : 'error'}
-          />
-        </div>
-      ) : null}
+  return (
+    <div className="h-full flex flex-col p-6 bg-background">
+      <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">系统设置</h1>
+            <p className="text-sm text-muted-foreground mt-1">管理应用配置和偏好设置。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => load()} disabled={isLoading || isSaving}>
+              <RefreshCw size={16} className="mr-2" />
+              重置
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => save()}
+              disabled={!hasDirty || isSaving || isLoading}
+              loading={isSaving}
+            >
+              <Save size={16} className="mr-2" />
+              保存修改 {dirtyCount > 0 && `(${dirtyCount})`}
+            </Button>
+          </div>
+      </div>
+
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+        {isLoading ? (
+          <div className="w-full h-full flex flex-col justify-center items-center gap-3">
+            <Spinner size="lg" />
+            <span className="text-muted-foreground">正在加载配置...</span>
+          </div>
+        ) : (
+          <>
+            {/* Sidebar */}
+            <div className="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-border bg-muted/30 overflow-y-auto custom-scrollbar">
+              <nav className="flex flex-col p-3 gap-1">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.category}
+                    onClick={() => setActiveCategory(cat.category)}
+                    className={`
+                      group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-all duration-200
+                      ${activeCategory === cat.category 
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border' 
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}
+                    `}
+                  >
+                    <div className="flex items-center gap-2">
+                        <Settings size={16} className={`opacity-70 ${activeCategory === cat.category ? 'text-primary' : ''}`} />
+                        {getCategoryTitleZh(cat.category)}
+                    </div>
+                    {activeCategory === cat.category && <ChevronRight size={14} className="text-muted-foreground" />}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto bg-card custom-scrollbar">
+              <div className="max-w-3xl p-6 lg:p-8 space-y-8">
+                <div className="pb-4 border-b border-border">
+                  <h3 className="text-lg font-semibold leading-none tracking-tight mb-2">
+                    {getCategoryTitleZh(activeCategory as SystemConfigCategory)}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {getCategoryDescriptionZh(activeCategory as SystemConfigCategory)}
+                  </p>
+                </div>
+                
+                <div className="space-y-8">
+                  {activeItems.map((item) => renderField(item))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

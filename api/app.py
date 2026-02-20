@@ -24,23 +24,41 @@ from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from api.v1 import api_v1_router
 from api.middlewares.error_handler import add_error_handlers
 from api.v1.schemas.common import RootResponse, HealthResponse
 from src.services.system_config_service import SystemConfigService
+from src.services.jwt_auth_service import JwtAuthService, JwtAuthError
+
+_PUBLIC_API_ALLOWLIST = {
+    ("GET", "/api/v1/auth/status"),
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/setup-password"),
+}
+
+_PROTECTED_DOC_PATHS = {
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/docs/oauth2-redirect",
+}
+
 
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Initialize and release shared services for the app lifecycle."""
     app.state.system_config_service = SystemConfigService()
+    app.state.jwt_auth_service = JwtAuthService()
     try:
         yield
     finally:
         if hasattr(app.state, "system_config_service"):
             delattr(app.state, "system_config_service")
+        if hasattr(app.state, "jwt_auth_service"):
+            delattr(app.state, "jwt_auth_service")
 
 
 def create_app(static_dir: Optional[Path] = None) -> FastAPI:
@@ -67,7 +85,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
             "- 历史记录：查询历史分析报告\n"
             "- 股票数据：获取行情数据\n\n"
             "## 认证方式\n"
-            "当前版本暂无认证要求"
+            "当前版本使用 JWT 认证（除登录初始化接口外）"
         ),
         version="1.0.0",
         lifespan=app_lifespan,
@@ -100,6 +118,64 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+    def _normalize_public_path(path: str) -> str:
+        normalized = path.rstrip("/")
+        return normalized or "/"
+
+    @app.middleware("http")
+    async def jwt_auth_guard(request: Request, call_next):
+        path = request.url.path
+
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        normalized_path = _normalize_public_path(path)
+
+        if normalized_path in _PROTECTED_DOC_PATHS:
+            pass
+        elif not path.startswith("/api/"):
+            return await call_next(request)
+
+        if (request.method.upper(), normalized_path) in _PUBLIC_API_ALLOWLIST:
+            return await call_next(request)
+
+        authorization = request.headers.get("Authorization", "")
+        if not authorization:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "missing_token",
+                    "message": "未登录或缺少 Authorization 令牌",
+                },
+            )
+
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "invalid_token",
+                    "message": "Authorization 头格式应为 Bearer <token>",
+                },
+            )
+
+        jwt_service = getattr(request.app.state, "jwt_auth_service", None) or JwtAuthService()
+        try:
+            claims = jwt_service.verify_token(token.strip())
+            request.state.auth_user = claims.get("sub")
+            request.state.auth_claims = claims
+        except JwtAuthError as exc:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": exc.error_code,
+                    "message": str(exc),
+                },
+            )
+
+        return await call_next(request)
     
     # ============================================================
     # 注册路由
@@ -163,7 +239,10 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
         async def serve_spa(request: Request, full_path: str):
             """SPA 路由回退 - 非 API 路由返回 index.html"""
             if full_path.startswith("api/"):
-                return None
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "not_found", "message": "API endpoint not found"},
+                )
             
             file_path = static_dir / full_path
             if file_path.exists() and file_path.is_file():

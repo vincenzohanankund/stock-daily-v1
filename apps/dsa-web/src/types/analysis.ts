@@ -12,6 +12,30 @@ export interface AnalysisRequest {
   asyncMode?: boolean;
 }
 
+export interface WatchlistItem {
+  stockCode: string;
+  stockName?: string;
+  lastAnalysisTime?: string;
+  lastPrice?: number;
+  changePct?: number;
+  trendPrediction?: string;
+  operationAdvice?: string;
+}
+
+export interface WatchlistResponse {
+  total: number;
+  items: WatchlistItem[];
+}
+
+export interface WatchlistMutationResponse {
+  success: boolean;
+  stockCode?: string;
+  added?: boolean;
+  removed?: boolean;
+  total?: number;
+  stockList: string[];
+}
+
 // ============ 报告类型 ============
 
 /** 报告元信息 */
@@ -191,4 +215,13 @@ export const getSentimentColor = (score: number): string => {
   if (score <= 60) return '#eab308'; // yellow-500
   if (score <= 80) return '#22c55e'; // green-500
   return '#10b981'; // emerald-500
+};
+
+/** 根据情绪评分获取 Tailwind 类名 */
+export const getSentimentClass = (score: number): string => {
+  if (score <= 20) return 'bg-red-500 shadow-red-500/50';
+  if (score <= 40) return 'bg-orange-500 shadow-orange-500/50';
+  if (score <= 60) return 'bg-yellow-500 shadow-yellow-500/50';
+  if (score <= 80) return 'bg-green-500 shadow-green-500/50';
+  return 'bg-emerald-500 shadow-emerald-500/50';
 };

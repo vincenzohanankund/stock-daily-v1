@@ -347,7 +347,8 @@ export function useSystemConfig() {
     load,
     retry,
     save,
-    resetDraft,
     setDraftValue,
+    draftValues,
+    resetDraft,
   };
 }

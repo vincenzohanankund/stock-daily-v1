@@ -1,91 +1,86 @@
-import type React from 'react';
-import { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
 
 interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   children: React.ReactNode;
-  width?: string;
+  width?: string | number;
+  position?: 'left' | 'right';
+  visible?: boolean; // For backward compatibility
+  onCancel?: () => void; // For backward compatibility
+  footer?: React.ReactNode; // Ignored for now or can be added
 }
 
-/**
- * 侧滑抽屉组件 - 终端风格
- */
-export const Drawer: React.FC<DrawerProps> = ({
+const Drawer: React.FC<DrawerProps> = ({
   isOpen,
   onClose,
   title,
   children,
-  width = 'max-w-2xl',
+  width = '400px',
+  position = 'right',
+  visible,
+  onCancel
 }) => {
-  // ESC 键关闭
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  const show = isOpen || visible || false;
+  const handleClose = onClose || onCancel;
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose?.();
+    };
+    if (show) {
+      document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
     }
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [show, handleClose]);
 
-  if (!isOpen) return null;
-
+  const drawerWidth = typeof width === 'number' ? `${width}px` : width;
+  
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* 遮罩层 */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
-        onClick={onClose}
+    <>
+      {/* Backdrop */}
+      <div 
+        className={`fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300 ${
+          show ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={handleClose}
+        aria-hidden="true"
       />
-
-      {/* 抽屉内容 */}
-      <div className={`absolute inset-y-0 right-0 w-full ${width} flex`}>
-        <div
-          className="relative w-full flex flex-col
-            bg-card border-l border-white/10
-            shadow-2xl
-            transform transition-transform duration-300 ease-out
-            animate-slide-in-right"
-        >
-          {/* 头部 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-            {title && (
-              <div>
-                <span className="label-uppercase">DETAIL VIEW</span>
-                <h2 className="text-lg font-semibold text-white mt-1">
-                  {title}
-                </h2>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="dock-item !w-10 !h-10"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 内容区 */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {children}
-          </div>
+      
+      {/* Drawer Panel */}
+      <div
+        className={`fixed inset-y-0 z-50 flex flex-col bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
+          position === 'right' ? 'right-0' : 'left-0'
+        } ${
+          show 
+            ? 'translate-x-0' 
+            : position === 'right' ? 'translate-x-full' : '-translate-x-full'
+        }`}
+        style={{ width: drawerWidth, maxWidth: '100vw' }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+          <button
+            onClick={handleClose}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto px-6 py-4 text-foreground">
+          {children}
         </div>
       </div>
-    </div>
+    </>
   );
 };
+
+export default Drawer;

@@ -35,6 +35,12 @@ from api.v1.schemas.stocks import (
     StockQuote,
     StockHistoryResponse,
     KLineData,
+    WatchlistResponse,
+    WatchlistItem,
+    WatchlistAddRequest,
+    WatchlistReplaceRequest,
+    WatchlistMutationResponse,
+    WatchlistRefreshTask,
 )
 from api.v1.schemas.backtest import (
     BacktestRunRequest,
@@ -42,6 +48,14 @@ from api.v1.schemas.backtest import (
     BacktestResultItem,
     BacktestResultsResponse,
     PerformanceMetrics,
+)
+from api.v1.schemas.auth import (
+    AuthStatusResponse,
+    LoginRequest,
+    LoginResponse,
+    SetupPasswordRequest,
+    ChangePasswordRequest,
+    PasswordMutationResponse,
 )
 from api.v1.schemas.system_config import (
     SystemConfigFieldSchema,
@@ -84,6 +98,12 @@ __all__ = [
     "StockQuote",
     "StockHistoryResponse",
     "KLineData",
+    "WatchlistResponse",
+    "WatchlistItem",
+    "WatchlistAddRequest",
+    "WatchlistReplaceRequest",
+    "WatchlistMutationResponse",
+    "WatchlistRefreshTask",
     # backtest
     "BacktestRunRequest",
     "BacktestRunResponse",
@@ -103,5 +123,12 @@ __all__ = [
     "ConfigValidationIssue",
     "ValidateSystemConfigResponse",
     "SystemConfigValidationErrorResponse",
+    # auth
+    "AuthStatusResponse",
+    "LoginRequest",
+    "LoginResponse",
+    "SetupPasswordRequest",
+    "ChangePasswordRequest",
+    "PasswordMutationResponse",
     "SystemConfigConflictResponse",
 ]

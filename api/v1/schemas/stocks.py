@@ -93,3 +93,61 @@ class StockHistoryResponse(BaseModel):
                 "data": []
             }
         }
+
+
+class WatchlistItem(BaseModel):
+    """Watchlist item."""
+
+    stock_code: str = Field(..., description="股票代码")
+    stock_name: Optional[str] = Field(None, description="股票名称")
+    last_analysis_time: Optional[str] = Field(None, description="最近分析时间")
+    last_price: Optional[float] = Field(None, description="最近价格")
+    change_pct: Optional[float] = Field(None, description="最近涨跌幅(%)")
+    trend_prediction: Optional[str] = Field(None, description="趋势预测")
+    operation_advice: Optional[str] = Field(None, description="操作建议")
+
+
+class WatchlistRefreshTask(BaseModel):
+    """Watchlist refresh task state."""
+
+    task_id: Optional[str] = Field(None, description="刷新任务 ID")
+    status: str = Field(..., description="任务状态: idle/processing/completed/failed")
+    completed: bool = Field(False, description="任务是否已结束")
+    is_new_task: bool = Field(False, description="是否本次请求新建任务")
+    progress_total: int = Field(0, description="任务总进度")
+    progress_done: int = Field(0, description="已完成进度")
+    started_at: Optional[str] = Field(None, description="开始时间")
+    finished_at: Optional[str] = Field(None, description="结束时间")
+    error: Optional[str] = Field(None, description="失败原因")
+
+
+class WatchlistResponse(BaseModel):
+    """Watchlist response."""
+
+    total: int = Field(..., description="总数")
+    items: List[WatchlistItem] = Field(default_factory=list, description="关注股票列表")
+    refresh_mode: Optional[str] = Field(None, description="行情刷新模式: blocking/async")
+    refresh_task: Optional[WatchlistRefreshTask] = Field(None, description="异步刷新任务状态")
+
+
+class WatchlistAddRequest(BaseModel):
+    """Add watchlist stock request."""
+
+    stock_code: str = Field(..., description="股票代码", examples=["600519"])
+
+
+class WatchlistReplaceRequest(BaseModel):
+    """Replace watchlist request."""
+
+    stock_codes: List[str] = Field(default_factory=list, description="股票代码列表")
+
+
+class WatchlistMutationResponse(BaseModel):
+    """Watchlist mutation response."""
+
+    success: bool = Field(True, description="是否成功")
+    stock_code: Optional[str] = Field(None, description="变更的股票代码")
+    added: Optional[bool] = Field(None, description="新增动作是否生效")
+    removed: Optional[bool] = Field(None, description="删除动作是否生效")
+    total: Optional[int] = Field(None, description="当前总数")
+    stock_list: List[str] = Field(default_factory=list, description="最新股票列表")

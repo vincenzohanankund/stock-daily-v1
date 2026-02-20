@@ -1,427 +1,372 @@
-import type React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowUp, ArrowDown, Minus, PlayCircle, Filter, AlertCircle } from 'lucide-react';
 import { backtestApi } from '../api/backtest';
-import { Card, Badge, Pagination } from '../components/common';
 import type {
   BacktestResultItem,
   BacktestRunResponse,
   PerformanceMetrics,
 } from '../types/backtest';
 
-// ============ Helpers ============
-
-function pct(value?: number | null): string {
-  if (value == null) return '--';
-  return `${value.toFixed(1)}%`;
-}
-
-function outcomeBadge(outcome?: string) {
-  if (!outcome) return <Badge variant="default">--</Badge>;
-  switch (outcome) {
-    case 'win':
-      return <Badge variant="success" glow>WIN</Badge>;
-    case 'loss':
-      return <Badge variant="danger" glow>LOSS</Badge>;
-    case 'neutral':
-      return <Badge variant="warning">NEUTRAL</Badge>;
-    default:
-      return <Badge variant="default">{outcome}</Badge>;
-  }
-}
-
-function statusBadge(status: string) {
-  switch (status) {
-    case 'completed':
-      return <Badge variant="success">completed</Badge>;
-    case 'insufficient':
-      return <Badge variant="warning">insufficient</Badge>;
-    case 'error':
-      return <Badge variant="danger">error</Badge>;
-    default:
-      return <Badge variant="default">{status}</Badge>;
-  }
-}
-
-function boolIcon(value?: boolean | null) {
-  if (value === true) return <span className="text-emerald-400">&#10003;</span>;
-  if (value === false) return <span className="text-red-400">&#10007;</span>;
-  return <span className="text-muted">--</span>;
-}
-
-// ============ Metric Row ============
-
-const MetricRow: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-    <span className="text-xs text-secondary">{label}</span>
-    <span className={`text-sm font-mono font-semibold ${accent ? 'text-cyan' : 'text-white'}`}>{value}</span>
-  </div>
-);
-
-// ============ Performance Card ============
-
-const PerformanceCard: React.FC<{ metrics: PerformanceMetrics; title: string }> = ({ metrics, title }) => (
-  <Card variant="gradient" padding="md" className="animate-fade-in">
-    <div className="mb-3">
-      <span className="label-uppercase">{title}</span>
-    </div>
-    <MetricRow label="Direction Accuracy" value={pct(metrics.directionAccuracyPct)} accent />
-    <MetricRow label="Win Rate" value={pct(metrics.winRatePct)} accent />
-    <MetricRow label="Avg Sim. Return" value={pct(metrics.avgSimulatedReturnPct)} />
-    <MetricRow label="Avg Stock Return" value={pct(metrics.avgStockReturnPct)} />
-    <MetricRow label="SL Trigger Rate" value={pct(metrics.stopLossTriggerRate)} />
-    <MetricRow label="TP Trigger Rate" value={pct(metrics.takeProfitTriggerRate)} />
-    <MetricRow label="Avg Days to Hit" value={metrics.avgDaysToFirstHit != null ? metrics.avgDaysToFirstHit.toFixed(1) : '--'} />
-    <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between">
-      <span className="text-xs text-muted">Evaluations</span>
-      <span className="text-xs text-secondary font-mono">
-        {Number(metrics.completedCount)} / {Number(metrics.totalEvaluations)}
-      </span>
-    </div>
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-muted">W / L / N</span>
-      <span className="text-xs font-mono">
-        <span className="text-emerald-400">{metrics.winCount}</span>
-        {' / '}
-        <span className="text-red-400">{metrics.lossCount}</span>
-        {' / '}
-        <span className="text-amber-400">{metrics.neutralCount}</span>
-      </span>
-    </div>
-  </Card>
-);
-
-// ============ Run Summary ============
-
-const RunSummary: React.FC<{ data: BacktestRunResponse }> = ({ data }) => (
-  <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-elevated border border-white/5 text-xs font-mono animate-fade-in">
-    <span className="text-secondary">Processed: <span className="text-white">{data.processed}</span></span>
-    <span className="text-secondary">Saved: <span className="text-cyan">{data.saved}</span></span>
-    <span className="text-secondary">Completed: <span className="text-emerald-400">{data.completed}</span></span>
-    <span className="text-secondary">Insufficient: <span className="text-amber-400">{data.insufficient}</span></span>
-    {data.errors > 0 && (
-      <span className="text-secondary">Errors: <span className="text-red-400">{data.errors}</span></span>
-    )}
-  </div>
-);
-
-// ============ Main Page ============
+import { Card } from '../components/common/Card';
+import Input from '../components/common/Input';
+import Button from '../components/common/Button';
+import { Badge } from '../components/common/Badge';
+import { Statistic } from '../components/common/Statistic';
+import { Divider } from '../components/common/Divider';
+import { Checkbox } from '../components/common/Checkbox';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/common/Table';
+import { Pagination } from '../components/common/Pagination';
+import { Spinner } from '../components/common/Spinner';
+import { useToast } from '../components/common/Toast';
 
 const BacktestPage: React.FC = () => {
-  // Input state
-  const [codeFilter, setCodeFilter] = useState('');
-  const [evalDays, setEvalDays] = useState('');
-  const [forceRerun, setForceRerun] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [runResult, setRunResult] = useState<BacktestRunResponse | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
-
-  // Results state
   const [results, setResults] = useState<BacktestResultItem[]>([]);
-  const [totalResults, setTotalResults] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [overallPerf, setOverallPerf] = useState<PerformanceMetrics | null>(null);
+  const [runResult, setRunResult] = useState<BacktestRunResponse | null>(null);
+
+  // Form State
+  const [filterCode, setFilterCode] = useState('');
+  const [filterEvalDays, setFilterEvalDays] = useState('');
+  const [forceRerun, setForceRerun] = useState(false);
+
+  const toast = useToast();
   const pageSize = 20;
 
-  // Performance state
-  const [overallPerf, setOverallPerf] = useState<PerformanceMetrics | null>(null);
-  const [stockPerf, setStockPerf] = useState<PerformanceMetrics | null>(null);
-  const [isLoadingPerf, setIsLoadingPerf] = useState(false);
-
-  // Fetch results
   const fetchResults = useCallback(async (page = 1, code?: string, windowDays?: number) => {
-    setIsLoadingResults(true);
+    setLoading(true);
     try {
-      const response = await backtestApi.getResults({ code: code || undefined, evalWindowDays: windowDays, page, limit: pageSize });
+      const response = await backtestApi.getResults({ 
+          code: code || undefined, 
+          evalWindowDays: windowDays, 
+          page, 
+          limit: pageSize 
+      });
       setResults(response.items);
-      setTotalResults(response.total);
+      setTotal(response.total);
       setCurrentPage(response.page);
     } catch (err) {
       console.error('Failed to fetch backtest results:', err);
+      toast.error('获取回测结果失败');
     } finally {
-      setIsLoadingResults(false);
+      setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
-  // Fetch performance
-  const fetchPerformance = useCallback(async (code?: string, windowDays?: number) => {
-    setIsLoadingPerf(true);
+  const fetchPerformance = useCallback(async (_code?: string, windowDays?: number) => {
     try {
       const overall = await backtestApi.getOverallPerformance(windowDays);
       setOverallPerf(overall);
-
-      if (code) {
-        const stock = await backtestApi.getStockPerformance(code, windowDays);
-        setStockPerf(stock);
-      } else {
-        setStockPerf(null);
-      }
     } catch (err) {
       console.error('Failed to fetch performance:', err);
-    } finally {
-      setIsLoadingPerf(false);
     }
   }, []);
 
-  // Initial load — fetch performance first, then filter results by its window
   useEffect(() => {
     const init = async () => {
-      // Get latest performance (unfiltered returns most recent summary)
       const overall = await backtestApi.getOverallPerformance();
       setOverallPerf(overall);
-      // Use the summary's eval_window_days to filter results consistently
       const windowDays = overall?.evalWindowDays;
-      if (windowDays && !evalDays) {
-        setEvalDays(String(windowDays));
+      if (windowDays) {
+          setFilterEvalDays(String(windowDays));
       }
       fetchResults(1, undefined, windowDays);
     };
     init();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchResults]);
 
-  // Run backtest
   const handleRun = async () => {
+    const code = filterCode.trim() || undefined;
+    const evalDays = filterEvalDays ? parseInt(filterEvalDays, 10) : undefined;
+
     setIsRunning(true);
     setRunResult(null);
-    setRunError(null);
     try {
-      const code = codeFilter.trim() || undefined;
-      const evalWindowDays = evalDays ? parseInt(evalDays, 10) : undefined;
       const response = await backtestApi.run({
         code,
         force: forceRerun || undefined,
         minAgeDays: forceRerun ? 0 : undefined,
-        evalWindowDays,
+        evalWindowDays: evalDays,
       });
       setRunResult(response);
-      // Refresh data with same eval_window_days
-      fetchResults(1, codeFilter.trim() || undefined, evalWindowDays);
-      fetchPerformance(codeFilter.trim() || undefined, evalWindowDays);
-    } catch (err) {
-      setRunError(err instanceof Error ? err.message : 'Backtest failed');
+      toast.success(`回测完成: ${response.completed} 已完成, ${response.processed} 已处理.`);
+      
+      fetchResults(1, code, evalDays);
+      fetchPerformance(code, evalDays);
+    } catch (err: any) {
+      toast.error(err.message || '回测失败');
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Filter by code
   const handleFilter = () => {
-    const code = codeFilter.trim() || undefined;
-    const windowDays = evalDays ? parseInt(evalDays, 10) : undefined;
-    setCurrentPage(1);
-    fetchResults(1, code, windowDays);
-    fetchPerformance(code, windowDays);
+    const evalDays = filterEvalDays ? parseInt(filterEvalDays, 10) : undefined;
+    fetchResults(1, filterCode, evalDays);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleFilter();
-    }
-  };
-
-  // Pagination
-  const totalPages = Math.ceil(totalResults / pageSize);
-  const handlePageChange = (page: number) => {
-    const windowDays = evalDays ? parseInt(evalDays, 10) : undefined;
-    fetchResults(page, codeFilter.trim() || undefined, windowDays);
+  const renderStatusTag = (val: string) => {
+    if (!val) return <span className="text-muted-foreground">--</span>;
+    // Chinese market convention: Red (destructive) is Up, Green (success) is Down
+    const color = val.includes('up') ? 'destructive' : val.includes('down') ? 'success' : 'secondary';
+    return <Badge variant={color}>{val}</Badge>;
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="flex-shrink-0 px-4 py-3 border-b border-white/5">
-        <div className="flex items-center gap-2 max-w-4xl">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={codeFilter}
-              onChange={(e) => setCodeFilter(e.target.value.toUpperCase())}
-              onKeyDown={handleKeyDown}
-              placeholder="Filter by stock code (leave empty for all)"
-              disabled={isRunning}
-              className="input-terminal w-full"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleFilter}
-            disabled={isLoadingResults}
-            className="btn-secondary flex items-center gap-1.5 whitespace-nowrap"
-          >
-            Filter
-          </button>
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <span className="text-xs text-muted">Window</span>
-            <input
-              type="number"
-              min={1}
-              max={120}
-              value={evalDays}
-              onChange={(e) => setEvalDays(e.target.value)}
-              placeholder="10"
-              disabled={isRunning}
-              className="input-terminal w-14 text-center text-xs py-2"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setForceRerun(!forceRerun)}
-            disabled={isRunning}
-            className={`
-              flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
-              transition-all duration-200 whitespace-nowrap border cursor-pointer
-              ${forceRerun
-                ? 'border-cyan/40 bg-cyan/10 text-cyan shadow-[0_0_8px_rgba(0,212,255,0.15)]'
-                : 'border-white/10 bg-transparent text-muted hover:border-white/20 hover:text-secondary'
-              }
-              disabled:opacity-50 disabled:cursor-not-allowed
-            `}
-          >
-            <span className={`
-              inline-block w-1.5 h-1.5 rounded-full transition-colors duration-200
-              ${forceRerun ? 'bg-cyan shadow-[0_0_4px_rgba(0,212,255,0.6)]' : 'bg-white/20'}
-            `} />
-            Force
-          </button>
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={isRunning}
-            className="btn-primary flex items-center gap-1.5 whitespace-nowrap"
-          >
-            {isRunning ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Running...
-              </>
+    <div className="h-full flex flex-col lg:flex-row gap-6 p-6 overflow-hidden bg-background">
+      {/* 1. Left Sidebar: Overall Performance */}
+      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-6 overflow-hidden">
+        <Card 
+          className="h-full flex flex-col border-border shadow-sm"
+          title={<div className="flex items-center gap-2"><span className="font-semibold">性能概览</span></div>}
+        >
+          <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+            {overallPerf ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                    <Statistic 
+                        title="准确率" 
+                        value={overallPerf.directionAccuracyPct} 
+                        precision={1} 
+                        suffix="%" 
+                        valueClassName="text-xl font-bold text-foreground"
+                    />
+                    <Statistic 
+                        title="胜率" 
+                        value={overallPerf.winRatePct} 
+                        precision={1} 
+                        suffix="%" 
+                        valueClassName="text-xl font-bold text-red-500"
+                    />
+                </div>
+
+                <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                    <Statistic 
+                        title="平均模拟收益" 
+                        value={overallPerf.avgSimulatedReturnPct} 
+                        precision={2} 
+                        suffix="%" 
+                        valueClassName={`text-2xl font-bold ${(overallPerf.avgSimulatedReturnPct || 0) > 0 ? 'text-red-500' : 'text-green-500'}`}
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Statistic 
+                            title="平均个股收益" 
+                            value={overallPerf.avgStockReturnPct} 
+                            precision={2} 
+                            suffix="%" 
+                            valueClassName="text-lg"
+                        />
+                        <Statistic 
+                            title="平均持有天数" 
+                            value={overallPerf.avgDaysToFirstHit} 
+                            precision={1} 
+                            valueClassName="text-lg"
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">触发条件</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Statistic 
+                            title="止损触发率" 
+                            value={overallPerf.stopLossTriggerRate} 
+                            precision={1} 
+                            suffix="%" 
+                            valueClassName="text-lg"
+                        />
+                        <Statistic 
+                            title="止盈触发率" 
+                            value={overallPerf.takeProfitTriggerRate} 
+                            precision={1} 
+                            suffix="%" 
+                            valueClassName="text-lg"
+                        />
+                    </div>
+                </div>
+                
+                <Divider className="border-dashed" />
+                
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">评估次数</span>
+                        <Badge variant="outline" className="font-mono">{overallPerf.completedCount} / {overallPerf.totalEvaluations}</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">胜 / 负 / 平</span>
+                        <div className="flex gap-1">
+                            <span className="text-red-500 font-bold">{overallPerf.winCount}</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-green-500 font-bold">{overallPerf.lossCount}</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-foreground">{overallPerf.neutralCount}</span>
+                        </div>
+                    </div>
+                </div>
+              </div>
             ) : (
-              'Run Backtest'
+              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                <AlertCircle size={24} className="mb-2 opacity-50" />
+                <span>暂无性能数据</span>
+              </div>
             )}
-          </button>
-        </div>
-        {runResult && (
-          <div className="mt-2 max-w-4xl">
-            <RunSummary data={runResult} />
           </div>
-        )}
-        {runError && (
-          <p className="mt-2 text-xs text-danger">{runError}</p>
-        )}
-      </header>
+        </Card>
+      </div>
 
-      {/* Main content */}
-      <main className="flex-1 flex overflow-hidden p-3 gap-3">
-        {/* Left sidebar - Performance */}
-        <div className="flex flex-col gap-3 w-64 flex-shrink-0 overflow-y-auto">
-          {isLoadingPerf ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-8 h-8 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
+      {/* 2. Right Content: Filter & Table */}
+      <div className="flex-1 flex flex-col overflow-hidden gap-4 min-w-0">
+        {/* Filter Bar */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-card p-4 rounded-lg border border-border shadow-sm">
+            <div className="flex-1 w-full sm:w-auto flex gap-3">
+                <div className="relative flex-1 max-w-xs">
+                    <Input 
+                        placeholder="按股票代码筛选..." 
+                        value={filterCode}
+                        onChange={(e) => setFilterCode(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
+                        className="w-full"
+                    />
+                </div>
+                <div className="w-24">
+                     <Input 
+                        placeholder="天数" 
+                        value={filterEvalDays}
+                        onChange={(e) => setFilterEvalDays(e.target.value)}
+                        className="w-full"
+                    />
+                </div>
             </div>
-          ) : overallPerf ? (
-            <PerformanceCard metrics={overallPerf} title="Overall Performance" />
-          ) : (
-            <Card padding="md">
-              <p className="text-xs text-muted text-center py-4">
-                No backtest data yet. Run a backtest to see performance metrics.
-              </p>
-            </Card>
-          )}
-
-          {stockPerf && (
-            <PerformanceCard metrics={stockPerf} title={`${stockPerf.code || codeFilter}`} />
-          )}
+            
+            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                <Checkbox 
+                    label="强制重测" 
+                    checked={forceRerun} 
+                    onChange={(e) => setForceRerun(e.target.checked)} 
+                />
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={handleFilter} icon={<Filter size={16} />}>
+                        筛选
+                    </Button>
+                    <Button variant="primary" onClick={handleRun} loading={isRunning} icon={<PlayCircle size={16} />}>
+                        开始回测
+                    </Button>
+                </div>
+            </div>
         </div>
 
-        {/* Right content - Results table */}
-        <section className="flex-1 overflow-y-auto">
-          {isLoadingResults ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <div className="w-10 h-10 border-3 border-cyan/20 border-t-cyan rounded-full animate-spin" />
-              <p className="mt-3 text-secondary text-sm">Loading results...</p>
+        {/* Run Summary (if available) */}
+        {runResult && (
+            <div className="px-4 py-3 bg-muted/50 rounded-lg border border-border flex flex-wrap gap-x-8 gap-y-2 text-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">已处理:</span>
+                    <span className="font-mono font-medium">{runResult.processed}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">已保存:</span>
+                    <span className="font-mono font-medium">{runResult.saved}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">已完成:</span>
+                    <span className="font-mono font-medium text-green-600 dark:text-green-400">{runResult.completed}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">数据不足:</span>
+                    <span className="font-mono font-medium text-yellow-600 dark:text-yellow-400">{runResult.insufficient}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">错误:</span>
+                    <span className="font-mono font-medium text-destructive">{runResult.errors}</span>
+                </div>
             </div>
-          ) : results.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-12 h-12 mb-3 rounded-xl bg-elevated flex items-center justify-center">
-                <svg className="w-6 h-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h3 className="text-base font-medium text-white mb-1.5">No Results</h3>
-              <p className="text-xs text-muted max-w-xs">
-                Run a backtest to evaluate historical analysis accuracy
-              </p>
-            </div>
-          ) : (
-            <div className="animate-fade-in">
-              <div className="overflow-x-auto rounded-xl border border-white/5">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-elevated text-left">
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Code</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Date</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Advice</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Dir.</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Outcome</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider text-right">Return%</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider text-center">SL</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider text-center">TP</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-secondary uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((row) => (
-                      <tr
-                        key={row.analysisHistoryId}
-                        className="border-t border-white/5 hover:bg-hover transition-colors"
-                      >
-                        <td className="px-3 py-2 font-mono text-cyan text-xs">{row.code}</td>
-                        <td className="px-3 py-2 text-xs text-secondary">{row.analysisDate || '--'}</td>
-                        <td className="px-3 py-2 text-xs text-white truncate max-w-[140px]" title={row.operationAdvice || ''}>
-                          {row.operationAdvice || '--'}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          <span className="flex items-center gap-1">
-                            {boolIcon(row.directionCorrect)}
-                            <span className="text-muted">{row.directionExpected || ''}</span>
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">{outcomeBadge(row.outcome)}</td>
-                        <td className="px-3 py-2 text-xs font-mono text-right">
-                          <span className={
-                            row.simulatedReturnPct != null
-                              ? row.simulatedReturnPct > 0 ? 'text-emerald-400' : row.simulatedReturnPct < 0 ? 'text-red-400' : 'text-secondary'
-                              : 'text-muted'
-                          }>
-                            {pct(row.simulatedReturnPct)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-center">{boolIcon(row.hitStopLoss)}</td>
-                        <td className="px-3 py-2 text-center">{boolIcon(row.hitTakeProfit)}</td>
-                        <td className="px-3 py-2">{statusBadge(row.evalStatus)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        )}
 
-              {/* Pagination */}
-              <div className="mt-4">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
+        {/* Results Table */}
+        <div className="flex-1 flex flex-col min-h-0 bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+            <div className="flex-1 overflow-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableHead className="w-[100px]">代码</TableHead>
+                            <TableHead className="w-[120px]">日期</TableHead>
+                            <TableHead>建议</TableHead>
+                            <TableHead>方向</TableHead>
+                            <TableHead>结果</TableHead>
+                            <TableHead className="text-right">收益</TableHead>
+                            <TableHead className="text-right">止损</TableHead>
+                            <TableHead className="text-right">Take Profit</TableHead>
+                            <TableHead className="text-center">Status</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                            <TableRow>
+                                <TableCell colSpan={9} className="h-32 text-center">
+                                    <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                        <Spinner size="md" />
+                                        <span>Loading results...</span>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : results.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+                                    No backtest results found
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            results.map((item) => (
+                                <TableRow key={item.analysisHistoryId}>
+                                    <TableCell className="font-medium font-mono">{item.code}</TableCell>
+                                    <TableCell className="text-muted-foreground text-xs">{item.analysisDate}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary" className="font-normal">{item.operationAdvice || '--'}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {renderStatusTag(item.directionExpected || '')}
+                                    </TableCell>
+                                    <TableCell>
+                                        {item.outcome === 'win' ? (
+                                            <Badge variant="destructive" className="gap-1 pl-1 pr-2"><ArrowUp size={12} /> WIN</Badge>
+                                        ) : item.outcome === 'loss' ? (
+                                            <Badge variant="success" className="gap-1 pl-1 pr-2"><ArrowDown size={12} /> LOSS</Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className="gap-1 pl-1 pr-2"><Minus size={12} /> FLAT</Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {(item.simulatedReturnPct !== undefined && item.simulatedReturnPct !== null) ? (
+                                            <div className={`flex items-center justify-end gap-1 font-mono font-medium ${item.simulatedReturnPct > 0 ? 'text-destructive' : 'text-green-500'}`}>
+                                                {item.simulatedReturnPct > 0 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+                                                {item.simulatedReturnPct.toFixed(2)}%
+                                            </div>
+                                        ) : <span className="text-muted-foreground">--</span>}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono text-sm text-muted-foreground">{item.stopLoss?.toFixed(2) || '--'}</TableCell>
+                                    <TableCell className="text-right font-mono text-sm text-muted-foreground">{item.takeProfit?.toFixed(2) || '--'}</TableCell>
+                                    <TableCell className="text-center"><Badge variant="outline" className="text-xs">{item.evalStatus}</Badge></TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+            
+            <div className="p-4 border-t border-border bg-muted/20">
+                <Pagination 
+                    currentPage={currentPage} 
+                    totalPages={Math.ceil(total / pageSize)} 
+                    onPageChange={(page) => {
+                        const evalDays = filterEvalDays ? parseInt(filterEvalDays, 10) : undefined;
+                        fetchResults(page, filterCode, evalDays);
+                    }} 
                 />
-              </div>
-
-              <p className="text-xs text-muted text-center mt-2">
-                {totalResults} result{totalResults !== 1 ? 's' : ''} total
-              </p>
             </div>
-          )}
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
   );
 };

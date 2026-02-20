@@ -16,7 +16,8 @@ export const validateStockCode = (value: string): ValidationResult => {
     /^\d{6}$/, // A 股 6 位数字
     /^(SH|SZ)\d{6}$/, // A 股带交易所前缀
     /^\d{5}$/, // 港股 5 位数字
-    /^[A-Z]{1,6}(\.[A-Z]{1,2})?$/, // 美股常见 Ticker
+    /^HK\d{5}$/, // 港股带 HK 前缀
+    /^[A-Z]{1,5}(\.[A-Z]{1,2})?$/, // 美股 Ticker (如 AAPL, BRK.B)
   ];
 
   const valid = patterns.some((regex) => regex.test(normalized));

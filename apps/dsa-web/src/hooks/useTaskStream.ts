@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { analysisApi } from '../api/analysis';
 import type { TaskInfo } from '../types/analysis';
+import { fetchEventSource, EventStreamContentType } from '@microsoft/fetch-event-source';
 
 /**
  * SSE 事件类型
@@ -37,7 +38,7 @@ export interface UseTaskStreamOptions {
   /** 连接成功回调 */
   onConnected?: () => void;
   /** 连接错误回调 */
-  onError?: (error: Event) => void;
+  onError?: (error: Error | Event) => void;
   /** 是否自动重连 */
   autoReconnect?: boolean;
   /** 重连延迟(ms) */
@@ -84,11 +85,10 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
     onConnected,
     onError,
     autoReconnect = true,
-    reconnectDelay = 3000,
     enabled = true,
   } = options;
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
   const isConnectedRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -142,83 +142,99 @@ export function useTaskStream(options: UseTaskStreamOptions = {}): UseTaskStream
     }
   }, []);
 
-  // 创建 EventSource 连接
-  const connect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    const url = analysisApi.getTaskStreamUrl();
-    const eventSource = new EventSource(url);
-    eventSourceRef.current = eventSource;
-
-    // 连接成功
-    eventSource.addEventListener('connected', () => {
-      isConnectedRef.current = true;
-      callbacksRef.current.onConnected?.();
-    });
-
-    // 任务创建
-    eventSource.addEventListener('task_created', (e) => {
-      const task = parseEventData(e.data);
-      if (task) callbacksRef.current.onTaskCreated?.(task);
-    });
-
-    // 任务开始
-    eventSource.addEventListener('task_started', (e) => {
-      const task = parseEventData(e.data);
-      if (task) callbacksRef.current.onTaskStarted?.(task);
-    });
-
-    // 任务完成
-    eventSource.addEventListener('task_completed', (e) => {
-      const task = parseEventData(e.data);
-      if (task) callbacksRef.current.onTaskCompleted?.(task);
-    });
-
-    // 任务失败
-    eventSource.addEventListener('task_failed', (e) => {
-      const task = parseEventData(e.data);
-      if (task) callbacksRef.current.onTaskFailed?.(task);
-    });
-
-    // 心跳 - 仅用于保持连接
-    eventSource.addEventListener('heartbeat', () => {
-      // 可选：更新最后心跳时间
-    });
-
-    // 错误处理
-    eventSource.onerror = (error) => {
-      isConnectedRef.current = false;
-      callbacksRef.current.onError?.(error);
-
-      // 自动重连
-      if (autoReconnect && enabled) {
-        eventSource.close();
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, reconnectDelay);
-      }
-    };
-  }, [
-    autoReconnect,
-    reconnectDelay,
-    enabled,
-    parseEventData,
-  ]);
+  // Ref to hold the connect function to break circular dependency
+  const connectRef = useRef<() => void>(() => {});
 
   // 断开连接
   const disconnect = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+    }
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
     isConnectedRef.current = false;
   }, []);
+
+  // 创建 EventSource 连接
+  const connect = useCallback(() => {
+    disconnect();
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    const url = analysisApi.getTaskStreamUrl();
+    const token = localStorage.getItem('auth_token');
+    
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    fetchEventSource(url, {
+        method: 'GET',
+        headers: headers,
+        signal: controller.signal,
+        async onopen(response) {
+            if (response.ok && response.headers.get('content-type')?.includes(EventStreamContentType)) {
+                isConnectedRef.current = true;
+                callbacksRef.current.onConnected?.();
+                return; 
+            } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+                 if (response.status === 401) {
+                     throw new Error('Unauthorized');
+                 }
+                 throw new Error(`Failed to connect: ${response.statusText}`);
+            }
+        },
+        onmessage(msg) {
+            if (msg.event === 'heartbeat' || msg.event === 'connected') return;
+
+            const task = parseEventData(msg.data);
+            if (task) {
+                switch (msg.event) {
+                    case 'task_created':
+                        callbacksRef.current.onTaskCreated?.(task);
+                        break;
+                    case 'task_started':
+                        callbacksRef.current.onTaskStarted?.(task);
+                        break;
+                    case 'task_completed':
+                        callbacksRef.current.onTaskCompleted?.(task);
+                        break;
+                    case 'task_failed':
+                        callbacksRef.current.onTaskFailed?.(task);
+                        break;
+                }
+            }
+        },
+        onerror(err) {
+            isConnectedRef.current = false;
+            callbacksRef.current.onError?.(err instanceof Error ? err : new Error(String(err)));
+            
+            if (err instanceof Error && err.message === 'Unauthorized') {
+                throw err;
+            }
+            
+            if (autoReconnect && enabled) {
+                // Do nothing -> Retry
+            } else {
+                throw err;
+            }
+        }
+    }).catch(err => {
+        console.error('SSE connection failed', err);
+        isConnectedRef.current = false;
+    });
+
+  }, [autoReconnect, enabled, parseEventData, disconnect]);
+
+  // Update connectRef whenever connect changes
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // 重连
   const reconnect = useCallback(() => {

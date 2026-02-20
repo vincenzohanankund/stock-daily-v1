@@ -122,7 +122,10 @@ export const analysisApi = {
    */
   getTaskStreamUrl: (): string => {
     // 获取 API base URL
-    const baseUrl = apiClient.defaults.baseURL || '';
+    let baseUrl = apiClient.defaults.baseURL || '';
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
     return `${baseUrl}/api/v1/analysis/tasks/stream`;
   },
 };

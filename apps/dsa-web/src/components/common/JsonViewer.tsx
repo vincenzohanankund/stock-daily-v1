@@ -79,8 +79,8 @@ export const JsonViewer: React.FC<JsonViewerProps> = ({
 
       {/* JSON 内容 */}
       <div
-        className="bg-slate-900/80 rounded-lg p-4 overflow-auto custom-scrollbar
-          border border-slate-700/50 font-mono text-sm text-gray-300"
+        className="bg-muted/50 rounded-lg p-4 overflow-auto
+          border border-border font-mono text-sm text-foreground"
         style={{ maxHeight }}
       >
         <pre className="whitespace-pre-wrap break-words">

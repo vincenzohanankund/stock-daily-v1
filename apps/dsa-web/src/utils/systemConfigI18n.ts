@@ -46,6 +46,14 @@ const fieldTitleMap: Record<string, string> = {
   BACKTEST_MIN_AGE_DAYS: '回测最小历史天数',
   BACKTEST_ENGINE_VERSION: '回测引擎版本',
   BACKTEST_NEUTRAL_BAND_PCT: '回测中性区间阈值（%）',
+  ENABLE_CHIP_DISTRIBUTION: '启用筹码分布',
+  ENABLE_REALTIME_QUOTE: '启用实时行情',
+  MARKET_REVIEW_ENABLED: '启用大盘复盘',
+  MAX_WORKERS: '最大并发数',
+  SCHEDULE_ENABLED: '启用定时任务',
+  CUSTOM_WEBHOOK_URLS: '自定义 Webhook',
+  CUSTOM_WEBHOOK_BEARER_TOKEN: '自定义 Webhook Token',
+  WEBHOOK_VERIFY_SSL: '验证 Webhook SSL',
 };
 
 const fieldDescriptionMap: Record<string, string> = {
@@ -74,6 +82,14 @@ const fieldDescriptionMap: Record<string, string> = {
   BACKTEST_MIN_AGE_DAYS: '仅回测早于该天数的分析记录。',
   BACKTEST_ENGINE_VERSION: '回测引擎版本标识，用于区分结果版本。',
   BACKTEST_NEUTRAL_BAND_PCT: '中性区间阈值百分比，例如 2 表示 -2%~+2%。',
+  ENABLE_CHIP_DISTRIBUTION: '是否启用筹码分布计算。',
+  ENABLE_REALTIME_QUOTE: '是否启用实时行情获取。',
+  MARKET_REVIEW_ENABLED: '是否启用每日大盘复盘分析。',
+  MAX_WORKERS: '并发执行的任务数量。',
+  SCHEDULE_ENABLED: '是否启用定时调度任务。',
+  CUSTOM_WEBHOOK_URLS: '自定义通知 Webhook 地址，支持多个（逗号分隔），例如钉钉、Discord、Slack。',
+  CUSTOM_WEBHOOK_BEARER_TOKEN: '用于自定义 Webhook 鉴权的 Bearer Token。',
+  WEBHOOK_VERIFY_SSL: '是否验证 HTTPS 证书。仅在受信任的内网自签名证书环境下设为 false。警告：禁用此项可能导致中间人攻击，请勿在公网环境禁用。',
 };
 
 export function getCategoryTitleZh(category: SystemConfigCategory, fallback?: string): string {

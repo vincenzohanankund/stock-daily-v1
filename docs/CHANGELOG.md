@@ -7,7 +7,27 @@
 
 ## [Unreleased]
 
+### 修复
+- 🐛 **自选股美股行情回填修复**
+  - `GET /api/v1/stocks/watchlist` 默认开启行情聚合（`include_quote=true`）
+  - 美股实时行情被限流时，自动回退到最近日线收盘价/涨跌幅，避免展示为空
+- 🐛 **Watchlist API 405 兼容修复**
+  - `GET/POST/PUT /api/v1/stocks/watchlist` 同时支持有无尾斜杠路径
+  - 新增兼容删除方式：`DELETE /api/v1/stocks/watchlist?stock_code=xxx`
+- 🐛 **Watchlist 行情慢响应优化**
+  - `StockService.get_watchlist()` 增加实时行情内存缓存（TTL 300 秒）与并发批量拉取
+  - 新增异步刷新链路：先返回最近一次快照，再后台刷新行情，降低首屏等待
+  - 新增刷新状态接口：`POST/GET /api/v1/stocks/watchlist/refresh`，支持前端轮询直到完成
+
 ### 新增
+- 🔐 **单用户登录管理（admin）**
+  - 新增认证接口：`/api/v1/auth/status`、`/api/v1/auth/login`、`/api/v1/auth/setup-password`、`/api/v1/auth/change-password`
+  - 支持首次登录密码初始化：未设置密码时引导先设置密码
+  - 登录成功返回 JWT，除登录初始化接口外，所有 `/api/*` 接口默认要求 Bearer Token
+  - 文档与元数据接口（`/docs`、`/openapi.json`）也纳入鉴权，避免未授权探测
+  - JWT 签名基于 `JWT_PRIVATE_KEY` 与设备 ID 绑定，跨设备伪造/复用令牌会被拒绝
+  - 新增服务器侧密码重置脚本 `reset_admin_password.py`，密码哈希写入 `.env`（`WEB_ADMIN_PASSWORD_HASH`）
+  - 出于安全考虑，不提供未鉴权的重置密码接口；在线改密仅允许已登录用户调用 `change-password`
 - 📷 **Markdown 转图片** (Issue #289)
   - 支持 `MARKDOWN_TO_IMAGE_CHANNELS` 配置，对 Telegram、企业微信、自定义 Webhook（Discord）、邮件以图片形式发送报告
   - 邮件为内联附件，增强对不支持 HTML 客户端的兼容性

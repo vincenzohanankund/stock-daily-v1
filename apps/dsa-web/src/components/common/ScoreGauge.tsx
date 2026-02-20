@@ -1,5 +1,4 @@
 import type React from 'react';
-import { useState, useEffect, useRef } from 'react';
 import { getSentimentLabel } from '../../types/analysis';
 
 interface ScoreGaugeProps {
@@ -19,46 +18,6 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
   showLabel = true,
   className = '',
 }) => {
-  // 动画状态
-  const [animatedScore, setAnimatedScore] = useState(0);
-  const [displayScore, setDisplayScore] = useState(0);
-  const animationRef = useRef<number | null>(null);
-  const prevScoreRef = useRef(0);
-
-  // 动画效果
-  useEffect(() => {
-    const startScore = prevScoreRef.current;
-    const endScore = score;
-    const duration = 1000; // 动画时长 ms
-    const startTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // 使用 easeOutCubic 缓动函数
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      
-      const currentScore = startScore + (endScore - startScore) * easeOut;
-      setAnimatedScore(currentScore);
-      setDisplayScore(Math.round(currentScore));
-
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        prevScoreRef.current = endScore;
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [score]);
-
   const label = getSentimentLabel(score);
 
   // 尺寸配置
@@ -68,117 +27,109 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({
     lg: { width: 180, stroke: 12, fontSize: 'text-5xl', labelSize: 'text-base', gap: 10 },
   };
 
-  const { width, stroke, fontSize, labelSize, gap } = sizeConfig[size];
+  const { width, stroke, fontSize, labelSize } = sizeConfig[size];
   const radius = (width - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   
-  // 从顶部开始，显示 270 度（3/4 圆弧）
-  const arcLength = circumference * 0.75;
-  const progress = (animatedScore / 100) * arcLength;
+  // 240度圆弧 (2/3 圆)
+  // 起始角度 150度 (左下)，结束角度 30度 (右下)，顺时针
+  // 这里使用 strokeDasharray 来控制显示的弧长
+  // 总长度是 circumference
+  // 我们显示 240/360 = 2/3 = 0.666...
+  const visibleFraction = 240 / 360;
+  const visibleLength = circumference * visibleFraction;
+  
+  // 旋转 -210度 (或者 150度) 来调整开口位置
+  // SVG 圆的起点 (0度) 是 3点钟方向 (右)
+  // 我们想要开口在下方 (90度方向是下)
+  // 如果我们要开口在下方 120度范围 (240度圆弧)
+  // 那么圆弧应该从 150度 (左下) 到 30度 (右下)
+  // 0度在右边。
+  // 旋转 150度: 起点变到 150度位置。
+  const rotation = 150; 
 
-  // 颜色映射 - 使用动画分数计算颜色过渡
+  // 颜色映射
   const getStrokeColor = (s: number) => {
-    if (s >= 60) return '#00d4ff'; // 青色 - 贪婪
-    if (s >= 40) return '#a855f7'; // 紫色 - 中性
-    return '#ff4466'; // 红色 - 恐惧
+    if (s >= 60) return '#22c55e'; // green-500
+    if (s >= 40) return '#eab308'; // yellow-500
+    return '#ef4444'; // red-500
   };
 
-  const strokeColor = getStrokeColor(animatedScore);
-  const glowColor = `${strokeColor}66`;
+  const strokeColor = getStrokeColor(score);
 
   return (
-    <div className={`flex flex-col items-center ${className}`}>
-      {/* 标题 */}
+    <div className={`flex flex-col items-center relative ${className}`}>
+      {/* Title moved to top as requested */}
       {showLabel && (
-        <span className="label-uppercase mb-3 text-secondary">
-          恐惧贪婪指数
+        <span className="uppercase text-[10px] font-semibold tracking-wider text-muted-foreground/70 mb-2">
+          恐慌与贪婪指数
         </span>
       )}
-
-      <div className="relative" style={{ width, height: width }}>
+      
+      <div className="relative" style={{ width, height: width * 0.85 }}> {/* Slightly reduced height for bottom cut */}
         <svg 
-          className="gauge-ring overflow-visible" 
+          className="overflow-visible" 
           width={width} 
           height={width}
-          style={{ filter: `drop-shadow(0 0 12px ${glowColor})` }}
+          viewBox={`0 0 ${width} ${width}`}
         >
           <defs>
-            {/* 渐变定义 */}
             <linearGradient id={`gauge-gradient-${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor={strokeColor} stopOpacity="0.6" />
               <stop offset="100%" stopColor={strokeColor} stopOpacity="1" />
             </linearGradient>
-            
-            {/* 发光滤镜 */}
-            <filter id={`gauge-glow-${score}`}>
-              <feGaussianBlur stdDeviation="4" result="blur" />
+            <filter id={`gauge-glow-${score}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" result="coloredBlur" />
               <feMerge>
-                <feMergeNode in="blur" />
+                <feMergeNode in="coloredBlur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
           </defs>
 
-          {/* 背景轨道 - 3/4 圆弧 */}
+          {/* Background Track */}
           <circle
             cx={width / 2}
             cy={width / 2}
             r={radius}
             fill="none"
-            stroke="rgba(255, 255, 255, 0.05)"
+            stroke="var(--color-muted)"
             strokeWidth={stroke}
             strokeLinecap="round"
-            strokeDasharray={`${arcLength} ${circumference}`}
-            transform={`rotate(135 ${width / 2} ${width / 2})`}
+            strokeDasharray={`${visibleLength} ${circumference}`}
+            strokeDashoffset={0}
+            transform={`rotate(${rotation} ${width / 2} ${width / 2})`}
+            className="opacity-20"
           />
 
-          {/* 发光层 */}
+          {/* Progress Arc */}
           <circle
             cx={width / 2}
             cy={width / 2}
             r={radius}
             fill="none"
             stroke={strokeColor}
-            strokeWidth={stroke + gap}
-            strokeLinecap="round"
-            strokeDasharray={`${progress} ${circumference}`}
-            transform={`rotate(135 ${width / 2} ${width / 2})`}
-            opacity="0.3"
-            filter={`url(#gauge-glow-${score})`}
-          />
-
-          {/* 进度圆弧 */}
-          <circle
-            cx={width / 2}
-            cy={width / 2}
-            r={radius}
-            fill="none"
-            stroke={`url(#gauge-gradient-${score})`}
             strokeWidth={stroke}
             strokeLinecap="round"
-            strokeDasharray={`${progress} ${circumference}`}
-            transform={`rotate(135 ${width / 2} ${width / 2})`}
+            strokeDasharray={`${visibleLength} ${circumference}`}
+            strokeDashoffset={visibleLength * (1 - score / 100)}
+            transform={`rotate(${rotation} ${width / 2} ${width / 2})`}
+            filter={`url(#gauge-glow-${score})`}
+            className="transition-all duration-1000 ease-out"
+            style={{ 
+              transition: 'stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
           />
         </svg>
 
-        {/* 中心数值 */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className={`font-bold ${fontSize} text-white`}
-            style={{ 
-              textShadow: `0 0 30px ${glowColor}`,
-            }}
-          >
-            {displayScore}
+        {/* Center Score */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pt-8">
+          <span className={`font-bold ${fontSize} transition-colors duration-500`} style={{ color: strokeColor }}>
+            {Math.round(score)}
           </span>
-          {showLabel && (
-            <span
-              className={`${labelSize} font-semibold mt-1`}
-              style={{ color: strokeColor }}
-            >
-              {label.toUpperCase()}
-            </span>
-          )}
+          <span className={`font-medium text-muted-foreground ${labelSize} mt-1`}>
+            {label}
+          </span>
         </div>
       </div>
     </div>

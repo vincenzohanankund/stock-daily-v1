@@ -32,6 +32,7 @@
 |------|------|------|
 | AI | 决策仪表盘 | 一句话核心结论 + 精确买卖点位 + 操作检查清单 |
 | 分析 | 多维度分析 | 技术面 + 筹码分布 + 舆情情报 + 实时行情 |
+| Web UI | 可视化交互 | 自选股管理、历史回溯、实时分析 |
 | 市场 | 全球市场 | 支持 A股、港股、美股 |
 | 复盘 | 大盘复盘 | 每日市场概览、板块涨跌、北向资金 |
 | 回测 | AI 回测验证 | 自动评估历史分析准确率，方向胜率、止盈止损命中率 |
@@ -210,6 +211,19 @@ python main.py
 ![img.png](sources/fastapi_server.png)
 
 包含完整的配置管理、任务监控和手动分析功能。
+
+> API 兼容性说明：`/api/v1/stocks/watchlist` 现支持有无尾斜杠两种路径，并兼容 `DELETE /api/v1/stocks/watchlist?stock_code=xxx` 的调用方式；默认会尝试返回行情数据（`include_quote=true`）。
+>
+> Watchlist 异步刷新模式：
+> - `GET /api/v1/stocks/watchlist?include_quote=true&refresh_async=true`：优先返回最近一次分析快照/缓存行情，并附带 `refresh_task`。
+> - `POST /api/v1/stocks/watchlist/refresh`：手动触发行情刷新任务（可选 `force=true`）。
+> - `GET /api/v1/stocks/watchlist/refresh?task_id=<task_id>`：查询刷新任务状态，适合前端每 3 秒轮询，直到 `completed=true`。
+
+> 认证说明：除 `POST /api/v1/auth/login`、`POST /api/v1/auth/setup-password`、`GET /api/v1/auth/status` 外，所有 `/api/*` 接口均需先登录并携带 `Authorization: Bearer <JWT>`。
+> JWT 使用设备绑定签名密钥（`JWT_PRIVATE_KEY` + 设备 ID）校验，跨设备伪造/复用令牌会被拒绝。
+> 默认用户名固定为 `admin`。若未设置 `WEB_ADMIN_PASSWORD_HASH`，可通过 `POST /api/v1/auth/setup-password` 完成首次密码设置；已设置后通过 `POST /api/v1/auth/login` 获取 JWT。
+> 在线修改密码请调用 `POST /api/v1/auth/change-password`（必须携带有效 JWT，并校验当前密码）。
+> 出于安全考虑，不提供未鉴权的重置密码接口；服务器侧紧急重置仍可使用 `python /app/reset_admin_password.py`（容器内）或 `python reset_admin_password.py`（源码目录）。
 
 ### 启动方式
 
