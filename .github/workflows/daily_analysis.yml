@@ -52,15 +52,7 @@ jobs:
           mkdir -p data logs reports
       
       - name: 执行股票分析
-      - name: Debug: test custom webhook
-        if: always()
-        run: |
-          echo "Testing CUSTOM_WEBHOOK_URLS..."
-          echo "URL: $CUSTOM_WEBHOOK_URLS"
-          echo "Sending test JSON..."
-          curl -v -X POST "$CUSTOM_WEBHOOK_URLS" \
-            -H "Content-Type: application/json" \
-            -d '{"title":"CI 测试","message":"测试 webhook","raw":"测试内容"}'
+
         env:
           # ==========================================
           # AI 配置
@@ -163,7 +155,15 @@ jobs:
           # 可选值: tencent, akshare_sina, efinance, akshare_em, tushare
           # 如果有 Tushare Pro 高积分账号，可将 tushare 放在首位
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
-          
+      - name: Debug: test custom webhook
+        if: always()
+        run: |
+          echo "Testing CUSTOM_WEBHOOK_URLS..."
+          echo "URL: $CUSTOM_WEBHOOK_URLS"
+          echo "Sending test JSON..."
+          curl -v -X POST "$CUSTOM_WEBHOOK_URLS" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"CI 测试","message":"测试 webhook","raw":"测试内容"}'
         run: |
           # 判断运行模式
           MODE="${{ github.event.inputs.mode || 'full' }}"
