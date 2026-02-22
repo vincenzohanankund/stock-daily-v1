@@ -197,15 +197,7 @@ jobs:
           else
             python main.py
           fi
-      - name: debug
-        if: always()
-        run: |
-          echo "Testing CUSTOM_WEBHOOK_URLS..."
-          echo "URL: $CUSTOM_WEBHOOK_URLS"
-          echo "Sending test JSON..."
-          curl -v -X POST "$CUSTOM_WEBHOOK_URLS" \
-            -H "Content-Type: application/json" \
-            -d '{"title":"CI 测试","message":"测试 webhook","raw":"测试内容"}'      
+
       - name: 上传分析报告
         uses: actions/upload-artifact@v4
         if: always()
