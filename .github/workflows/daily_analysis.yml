@@ -52,6 +52,15 @@ jobs:
           mkdir -p data logs reports
       
       - name: 执行股票分析
+      - name: Debug: test custom webhook
+        if: always()
+        run: |
+          echo "Testing CUSTOM_WEBHOOK_URLS..."
+          echo "URL: $CUSTOM_WEBHOOK_URLS"
+          echo "Sending test JSON..."
+          curl -v -X POST "$CUSTOM_WEBHOOK_URLS" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"CI 测试","message":"测试 webhook","raw":"测试内容"}'
         env:
           # ==========================================
           # AI 配置
@@ -111,7 +120,8 @@ jobs:
           # 方式七：自定义 Webhook（钉钉、Bark、自建服务等）
           CUSTOM_WEBHOOK_URLS: ${{ secrets.CUSTOM_WEBHOOK_URLS }}
           CUSTOM_WEBHOOK_BEARER_TOKEN: ${{ secrets.CUSTOM_WEBHOOK_BEARER_TOKEN }}
-          
+
+
           # 方式八：Discord
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
