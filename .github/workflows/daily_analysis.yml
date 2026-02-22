@@ -197,7 +197,7 @@ jobs:
           else
             python main.py
           fi
-      - name: Debug: test custom webhook
+      - name: debug
         if: always()
         run: |
           echo "Testing CUSTOM_WEBHOOK_URLS..."
