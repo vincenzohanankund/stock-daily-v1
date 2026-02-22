@@ -207,6 +207,19 @@ class StockAnalysisPipeline:
             except Exception as e:
                 logger.warning(f"[{code}] 获取筹码分布失败: {e}")
             
+            # If agent mode is enabled, or specific agent skills are configured, use the Agent analysis pipeline
+            use_agent = getattr(self.config, 'agent_mode', False)
+            if not use_agent:
+                # Auto-enable agent mode when specific skills are configured (e.g., scheduled task with strategy)
+                configured_skills = getattr(self.config, 'agent_skills', [])
+                if configured_skills and configured_skills != ['all']:
+                    use_agent = True
+                    logger.info(f"[{code}] Auto-enabled agent mode due to configured skills: {configured_skills}")
+
+            if use_agent:
+                logger.info(f"[{code}] 启用 Agent 模式进行分析")
+                return self._analyze_with_agent(code, report_type, query_id, stock_name, realtime_quote, chip_data)
+            
             # Step 3: 趋势分析（基于交易理念）
             trend_result: Optional[TrendAnalysisResult] = None
             try:
@@ -405,6 +418,147 @@ class StockAnalysisPipeline:
         )
 
         return enhanced
+
+    def _analyze_with_agent(
+        self, 
+        code: str, 
+        report_type: ReportType, 
+        query_id: str,
+        stock_name: str,
+        realtime_quote: Any,
+        chip_data: Optional[ChipDistribution]
+    ) -> Optional[AnalysisResult]:
+        """
+        使用 Agent 模式分析单只股票。
+        """
+        try:
+            from src.agent.executor import AgentExecutor
+            from src.agent.llm_adapter import LLMToolAdapter
+            from src.agent.tools.registry import ToolRegistry
+            from src.agent.skills.base import SkillManager
+            from src.agent.tools.data_tools import ALL_DATA_TOOLS
+            from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
+            from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
+            from src.agent.tools.market_tools import ALL_MARKET_TOOLS
+
+            # 构建工具注册表
+            registry = ToolRegistry()
+            for tool_fn in (ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS):
+                registry.register(tool_fn)
+
+            # 构建技能管理器
+            skill_manager = SkillManager()
+            skill_manager.load_builtin_strategies()
+            custom_dir = getattr(self.config, 'agent_strategy_dir', None)
+            if custom_dir:
+                skill_manager.load_custom_strategies(custom_dir)
+
+            skills_to_activate = getattr(self.config, 'agent_skills', [])
+            if skills_to_activate:
+                skill_manager.activate(skills_to_activate)
+            else:
+                skill_manager.activate(["all"])
+
+            skill_instructions = skill_manager.get_skill_instructions()
+
+            # 构建 LLM 适配器
+            llm_adapter = LLMToolAdapter(self.config)
+
+            # 构建执行器
+            executor = AgentExecutor(
+                tool_registry=registry,
+                llm_adapter=llm_adapter,
+                skill_instructions=skill_instructions,
+                max_steps=getattr(self.config, 'agent_max_steps', 10),
+            )
+
+            # 构建初始上下文，避免 Agent 重复调用工具
+            initial_context = {
+                "stock_code": code,
+                "stock_name": stock_name,
+                "report_type": report_type.value,
+            }
+            
+            if realtime_quote:
+                initial_context["realtime_quote"] = self._safe_to_dict(realtime_quote)
+            if chip_data:
+                initial_context["chip_distribution"] = self._safe_to_dict(chip_data)
+
+            # 运行 Agent
+            message = f"请分析股票 {code} ({stock_name})，并生成决策仪表盘报告。"
+            agent_result = executor.run(message, context=initial_context)
+
+            # 转换为 AnalysisResult
+            result = self._agent_result_to_analysis_result(agent_result, code, stock_name, report_type, query_id)
+
+            # 保存分析历史记录
+            if result:
+                try:
+                    self.db.save_analysis_history(
+                        result=result,
+                        query_id=query_id,
+                        report_type=report_type.value,
+                        news_content=None,
+                        context_snapshot=initial_context,
+                        save_snapshot=self.save_context_snapshot
+                    )
+                except Exception as e:
+                    logger.warning(f"[{code}] 保存 Agent 分析历史失败: {e}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[{code}] Agent 分析失败: {e}")
+            logger.exception(f"[{code}] Agent 详细错误信息:")
+            return None
+
+    def _agent_result_to_analysis_result(
+        self, agent_result, code: str, stock_name: str, report_type: ReportType, query_id: str
+    ) -> AnalysisResult:
+        """
+        将 AgentResult 转换为 AnalysisResult。
+        """
+        result = AnalysisResult(
+            code=code,
+            name=stock_name,
+            sentiment_score=50,
+            trend_prediction="未知",
+            operation_advice="观望",
+            success=agent_result.success,
+            error_message=agent_result.error if not agent_result.success else None,
+            data_sources=f"agent:{agent_result.provider}"
+        )
+
+        if agent_result.success and agent_result.dashboard:
+            dash = agent_result.dashboard
+            result.sentiment_score = self._safe_int(dash.get("sentiment_score"), 50)
+            result.trend_prediction = dash.get("trend_prediction", "未知")
+            result.operation_advice = dash.get("operation_advice", "观望")
+            result.decision_type = dash.get("decision_type", "hold")
+            result.dashboard = dash
+        else:
+            result.sentiment_score = 50
+            result.operation_advice = "观望"
+            if not result.error_message:
+                result.error_message = "Agent 未能生成有效的决策仪表盘"
+
+        return result
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 50) -> int:
+        """安全地将值转换为整数。"""
+        if value is None:
+            return default
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            import re
+            match = re.search(r'-?\d+', value)
+            if match:
+                return int(match.group())
+        return default
     
     def _describe_volume_ratio(self, volume_ratio: float) -> str:
         """

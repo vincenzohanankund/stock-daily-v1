@@ -15,6 +15,11 @@
   - 根因：`get_analysis_context` 仅返回 2 天数据且无 `raw_data`，pipeline 中 `raw_data in context` 始终为 False
   - 修复：Step 3 直接调用 `get_data_range` 获取 90 日历天（约 60 交易日）历史数据用于趋势分析
   - 改善：趋势分析失败时用 `logger.warning(..., exc_info=True)` 记录完整 traceback
+- 🐛 **Agent 对话会话存储与默认策略修复**
+  - 修复 `DatabaseManager` 缺失 `session_scope` 导致 `/api/v1/agent/chat` 返回 500 的问题
+  - 修复会话历史读取的数据结构不一致问题，避免多轮对话中断
+  - 新增内置默认多头策略 `bull_trend`，并将默认策略收敛为更适合常规个股分析的组合
+  - Web 端对话页文案调整为“策略对话”，并默认勾选多头相关策略，降低使用门槛
 - 🐛 **BOT 与 WEB UI 股票代码大小写统一** (Issue #355)
   - BOT `/analyze` 与 WEB UI 触发分析的股票代码统一为大写（如 `aapl` → `AAPL`）
   - 新增 `canonical_stock_code()`，在 BOT、API、Config、CLI、task_queue 入口处规范化

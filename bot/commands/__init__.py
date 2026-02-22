@@ -13,6 +13,7 @@ from bot.commands.status import StatusCommand
 from bot.commands.analyze import AnalyzeCommand
 from bot.commands.market import MarketCommand
 from bot.commands.batch import BatchCommand
+from bot.commands.ask import AskCommand
 
 # 所有可用命令（用于自动注册）
 ALL_COMMANDS = [
@@ -21,6 +22,7 @@ ALL_COMMANDS = [
     AnalyzeCommand,
     MarketCommand,
     BatchCommand,
+    AskCommand,
 ]
 
 __all__ = [
@@ -28,6 +30,9 @@ __all__ = [
     'HelpCommand',
     'StatusCommand',
     'AnalyzeCommand',
+    'MarketCommand',
+    'BatchCommand',
+    'AskCommand',
     'MarketCommand',
     'BatchCommand',
     'ALL_COMMANDS',
