@@ -7,7 +7,7 @@
 
 ## [Unreleased]
 
-### 新增
+### 新增（#minor）
 - 🤖 **Agent 策略问股**（全链路，#367）
   - **API**：新增 `/api/v1/agent/strategies`（获取策略列表）与 `/api/v1/agent/chat/stream`（SSE 流式对话）
   - **核心**：`src/agent/`（AgentExecutor ReAct 循环、LLMToolAdapter 多厂商适配、ConversationManager 会话持久化、ToolRegistry 工具注册）
@@ -17,8 +17,10 @@
   - **流水线接入**：`AGENT_MODE=true` 时 pipeline 自动路由至 Agent 分析分支，向下兼容
   - **配置项**：`AGENT_MODE`、`AGENT_MAX_STEPS`、`AGENT_STRATEGY_DIR`
   - **兼容性**：`AGENT_MODE` 默认 false，不影响现有非 Agent 模式；回滚只需将 `AGENT_MODE` 设为 false
+- ⚙️ **Agent 工具链能力增强**
+  - 扩展 `analysis_tools` 与 `data_tools`，优化策略问股的工具调用链路与分析覆盖
 
-### 修复
+### 修复（#patch）
 - 🐛 **Agent 对话 Bug 修复**（#367 review follow-up）
   - 修复 `bot/commands/ask.py` 中 `list_strategies()` 方法不存在导致策略名称回显失败，改为 `list_skills()` 正确属性访问
   - 修复 `session_id` 缺省值为 `"default_session"` 导致多用户/多标签页会话串用，改为每次生成 UUID
@@ -27,20 +29,44 @@
   - `storage.py` 中 `session.query()` 改为 SQLAlchemy 2.x 风格 `session.execute(select(...))`
   - `ChatPage.tsx` 消除所有 `@typescript-eslint/no-explicit-any` 报错，引入 `FollowUpContext`、`ChatStreamPayload` 接口
   - Agent 进度提示从「第 N 步：AI 正在思考...」改为具体动作描述（如「行情获取」已完成，继续深入分析...）
-- 🐛 **StockTrendAnalyzer 从未执行** (Issue #357)
-  - 根因：`get_analysis_context` 仅返回 2 天数据且无 `raw_data`，pipeline 中 `raw_data in context` 始终为 False
-  - 修复：Step 3 直接调用 `get_data_range` 获取 90 日历天（约 60 交易日）历史数据用于趋势分析
-  - 改善：趋势分析失败时用 `logger.warning(..., exc_info=True)` 记录完整 traceback
 - 🐛 **Agent 对话会话存储与默认策略修复**
   - 修复 `DatabaseManager` 缺失 `session_scope` 导致 `/api/v1/agent/chat` 返回 500 的问题
   - 修复会话历史读取的数据结构不一致问题，避免多轮对话中断
   - 新增内置默认多头策略 `bull_trend`，并将默认策略收敛为更适合常规个股分析的组合
   - Web 端对话页文案调整为“策略对话”，并默认勾选多头相关策略，降低使用门槛
-- 🐛 **BOT 与 WEB UI 股票代码大小写统一** (Issue #355)
-  - BOT `/analyze` 与 WEB UI 触发分析的股票代码统一为大写（如 `aapl` → `AAPL`）
-  - 新增 `canonical_stock_code()`，在 BOT、API、Config、CLI、task_queue 入口处规范化
-  - 历史记录与任务去重逻辑可正确识别同一股票（大小写不再影响）
-- 🐛 **ETF 分析仅关注指数走势** (Issue #274)
+- 🐛 **Dashboard 嵌套映射与测试硬编码修复**
+  - 修复 Dashboard 端策略结果映射中的嵌套结构解析问题，避免展示异常
+  - 修复测试中的硬编码数据，减少因固定值导致的回归误报
+
+### 测试（#patch）
+- ✅ **Agent 相关测试更新**
+  - 更新策略数量断言（`6 -> 11`），并同步 `test_agent_pipeline`、`test_agent_registry` 的断言逻辑
+
+### 文档（#skip）
+- 📝 **Agent 文档补充**
+  - 更新 `README.md`、`docs/README_EN.md`、`docs/README_CHT.md` 与 changelog，补充策略问股使用说明与测试说明
+
+## [3.2.11] - 2026-02-23
+
+### 修复（#patch）
+- 🐛 **StockTrendAnalyzer 从未执行** (Issue #357)
+  - 根因：`get_analysis_context` 仅返回 2 天数据且无 `raw_data`，pipeline 中 `raw_data in context` 始终为 False
+  - 修复：Step 3 直接调用 `get_data_range` 获取 90 日历天（约 60 交易日）历史数据用于趋势分析
+  - 改善：趋势分析失败时用 `logger.warning(..., exc_info=True)` 记录完整 traceback
+
+## [3.2.10] - 2026-02-22
+
+### 新增
+- ⚙️ 支持 `RUN_IMMEDIATELY` 配置项，设为 `true` 时定时任务触发后立即执行一次分析，无需等待首个定时点
+
+### 修复
+- 🐛 修复 Web UI 页面居中问题
+- 🐛 修复 Settings 返回 500 错误
+
+## [3.2.9] - 2026-02-22
+
+### 修复
+- 🐛 **ETF 分析仅关注指数走势**（Issue #274）
   - 美股/港股 ETF（如 VOO、QQQ）与 A 股 ETF 不再纳入基金公司层面风险（诉讼、声誉等）
   - 搜索维度：ETF/指数专用 risk_check、earnings、industry 查询，避免命中基金管理人新闻
   - AI 提示：指数型标的分析约束，`risk_alerts` 不得出现基金管理人公司经营风险
