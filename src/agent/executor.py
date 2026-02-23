@@ -12,6 +12,7 @@ Orchestrates the LLM + tools interaction loop:
 
 import json
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -21,7 +22,6 @@ from json_repair import repair_json
 
 from src.agent.llm_adapter import LLMToolAdapter, LLMResponse, ToolCall
 from src.agent.tools.registry import ToolRegistry
-from src.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +29,18 @@ logger = logging.getLogger(__name__)
 # Tool name → short label used to build contextual thinking messages
 _THINKING_TOOL_LABELS: Dict[str, str] = {
     "get_realtime_quote": "行情获取",
-    "get_k_history": "K线数据获取",
-    "get_technical_analysis": "技术指标分析",
-    "get_chip_analysis": "筹码分布分析",
-    "search_news": "新闻搜索",
-    "search_web": "网络搜索",
-    "get_market_overview": "市场概览获取",
-    "get_sector_analysis": "行业板块分析",
-    "get_financial_data": "财务数据获取",
+    "get_daily_history": "K线数据获取",
+    "analyze_trend": "技术指标分析",
+    "get_chip_distribution": "筹码分布分析",
+    "search_stock_news": "新闻搜索",
+    "search_comprehensive_intel": "综合情报搜索",
+    "get_market_indices": "市场概览获取",
+    "get_sector_rankings": "行业板块分析",
+    "get_analysis_context": "历史分析上下文",
     "get_stock_info": "基本信息获取",
     "analyze_pattern": "K线形态识别",
     "get_volume_analysis": "量能分析",
+    "calculate_ma": "均线计算",
 }
 
 
@@ -66,12 +67,22 @@ class AgentResult:
 
 AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析 Agent，拥有数据工具和交易策略，负责生成专业的【决策仪表盘】分析报告。
 
-## 工作流程
+## 工作流程（必须严格按阶段顺序执行，每阶段等工具结果返回后再进入下一阶段）
 
-1. **获取数据**：使用可用工具获取目标股票的实时行情、历史K线、筹码分布和技术分析数据。
-2. **搜索情报**：使用搜索工具查找最新新闻、风险因素和业绩展望。
-3. **应用策略**：根据激活的交易策略标准评估股票。
-4. **生成报告**：输出完整的决策仪表盘 JSON 格式报告。
+**第一阶段 · 行情与K线**（首先执行）
+- `get_realtime_quote` 获取实时行情
+- `get_daily_history` 获取历史K线
+
+**第二阶段 · 技术与筹码**（等第一阶段结果返回后执行）
+- `analyze_trend` 获取技术指标
+- `get_chip_distribution` 获取筹码分布
+
+**第三阶段 · 情报搜索**（等前两阶段完成后执行）
+- `search_stock_news` 搜索最新资讯、减持、业绩预告等风险信号
+
+**第四阶段 · 生成报告**（所有数据就绪后，输出完整决策仪表盘 JSON）
+
+> ⚠️ 每阶段的工具调用必须完整返回结果后，才能进入下一阶段。禁止将不同阶段的工具合并到同一次调用中。
 
 ## 核心交易理念（必须严格遵守）
 
@@ -108,7 +119,7 @@ AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析 
 ## 规则
 
 1. **必须调用工具获取真实数据** — 绝不编造数字，所有数据必须来自工具返回结果。
-2. **系统化分析** — 按顺序执行：实时行情 → 历史K线 → 技术分析 → 新闻搜索 → 综合分析。
+2. **系统化分析** — 严格按工作流程分阶段执行，每阶段完整返回后再进入下一阶段，**禁止**将不同阶段的工具合并到同一次调用中。
 3. **应用交易策略** — 评估每个激活策略的条件，在报告中体现策略判断结果。
 4. **输出格式** — 最终响应必须是有效的决策仪表盘 JSON。
 5. **风险优先** — 必须排查风险（股东减持、业绩预警、监管问题）。
@@ -213,6 +224,26 @@ AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析 
 """
 
 CHAT_SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析 Agent，拥有数据工具和交易策略，负责解答用户的股票投资问题。
+
+## 分析工作流程（必须严格按阶段执行，禁止跳步或合并阶段）
+
+当用户询问某支股票时，必须按以下四个阶段顺序调用工具，每阶段等工具结果全部返回后再进入下一阶段：
+
+**第一阶段 · 行情与K线**（必须先执行）
+- 调用 `get_realtime_quote` 获取实时行情和当前价格
+- 调用 `get_daily_history` 获取近期历史K线数据
+
+**第二阶段 · 技术与筹码**（等第一阶段结果返回后再执行）
+- 调用 `analyze_trend` 获取 MA/MACD/RSI 等技术指标
+- 调用 `get_chip_distribution` 获取筹码分布结构
+
+**第三阶段 · 情报搜索**（等前两阶段完成后再执行）
+- 调用 `search_stock_news` 搜索最新新闻公告、减持、业绩预告等风险信号
+
+**第四阶段 · 综合分析**（所有工具数据就绪后生成回答）
+- 基于上述真实数据，结合激活策略进行综合研判，输出投资建议
+
+> ⚠️ 禁止将不同阶段的工具合并到同一次调用中（例如禁止在第一次调用中同时请求行情、技术指标和新闻）。
 
 ## 核心交易理念（必须严格遵守）
 
@@ -591,29 +622,36 @@ class AgentExecutor:
             return None
 
         # Try to extract JSON from markdown code blocks
-        import re
         json_blocks = re.findall(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
         if json_blocks:
             for block in json_blocks:
                 try:
-                    return json.loads(block)
+                    parsed = json.loads(block)
+                    if isinstance(parsed, dict):
+                        return parsed
                 except json.JSONDecodeError:
                     try:
                         repaired = repair_json(block)
-                        return json.loads(repaired)
+                        parsed = json.loads(repaired)
+                        if isinstance(parsed, dict):
+                            return parsed
                     except Exception:
                         continue
 
         # Try raw JSON parse
         try:
-            return json.loads(content)
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
             pass
 
         # Try json_repair
         try:
             repaired = repair_json(content)
-            return json.loads(repaired)
+            parsed = json.loads(repaired)
+            if isinstance(parsed, dict):
+                return parsed
         except Exception:
             pass
 
@@ -623,11 +661,15 @@ class AgentExecutor:
         if brace_start >= 0 and brace_end > brace_start:
             candidate = content[brace_start:brace_end + 1]
             try:
-                return json.loads(candidate)
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    return parsed
             except json.JSONDecodeError:
                 try:
                     repaired = repair_json(candidate)
-                    return json.loads(repaired)
+                    parsed = json.loads(repaired)
+                    if isinstance(parsed, dict):
+                        return parsed
                 except Exception:
                     pass
 

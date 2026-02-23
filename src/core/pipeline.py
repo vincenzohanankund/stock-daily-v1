@@ -435,7 +435,7 @@ class StockAnalysisPipeline:
             from src.agent.factory import build_agent_executor
 
             # Build executor from shared factory (ToolRegistry and SkillManager prototype are cached)
-            executor = build_agent_executor(self.config, self.config.agent_skills or None)
+            executor = build_agent_executor(self.config, getattr(self.config, 'agent_skills', None) or None)
 
             # Build initial context to avoid redundant tool calls
             initial_context = {

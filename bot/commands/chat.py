@@ -4,7 +4,6 @@ Chat command for free-form conversation with the Agent.
 """
 
 import logging
-from typing import Any, Dict, Optional
 
 from bot.commands.base import BotCommand
 from bot.models import BotMessage, BotResponse

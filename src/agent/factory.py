@@ -20,7 +20,7 @@ Usage::
 
     from src.agent.factory import build_agent_executor
 
-    executor = build_agent_executor(config, skills=["comprehensive_analysis"])
+    executor = build_agent_executor(config, skills=["bull_trend", "shrink_pullback"])
     result   = executor.chat(message="...", session_id="...")
 """
 
