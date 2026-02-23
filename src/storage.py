@@ -1227,9 +1227,10 @@ class DatabaseManager:
         获取 Agent 对话历史
         """
         with self.session_scope() as session:
-            messages = session.query(ConversationMessage).filter(
+            stmt = select(ConversationMessage).filter(
                 ConversationMessage.session_id == session_id
-            ).order_by(ConversationMessage.created_at.desc()).limit(limit).all()
+            ).order_by(ConversationMessage.created_at.desc()).limit(limit)
+            messages = session.execute(stmt).scalars().all()
             
             # 倒序返回，保证时间顺序
             return [{"role": msg.role, "content": msg.content} for msg in reversed(messages)]

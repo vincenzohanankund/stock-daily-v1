@@ -26,6 +26,23 @@ from src.config import get_config
 logger = logging.getLogger(__name__)
 
 
+# Tool name → short label used to build contextual thinking messages
+_THINKING_TOOL_LABELS: Dict[str, str] = {
+    "get_realtime_quote": "行情获取",
+    "get_k_history": "K线数据获取",
+    "get_technical_analysis": "技术指标分析",
+    "get_chip_analysis": "筹码分布分析",
+    "search_news": "新闻搜索",
+    "search_web": "网络搜索",
+    "get_market_overview": "市场概览获取",
+    "get_sector_analysis": "行业板块分析",
+    "get_financial_data": "财务数据获取",
+    "get_stock_info": "基本信息获取",
+    "analyze_pattern": "K线形态识别",
+    "get_volume_analysis": "量能分析",
+}
+
+
 # ============================================================
 # Agent result
 # ============================================================
@@ -369,12 +386,15 @@ class AgentExecutor:
         messages.append({"role": "user", "content": message})
 
         result = self._run_loop(messages, tool_decls, start_time, tool_calls_log, total_tokens, parse_dashboard=False, progress_callback=progress_callback)
-        
+
+        # Always persist the user turn; persist assistant reply (or error note) for context continuity
+        conversation_manager.add_message(session_id, "user", message)
         if result.success:
-            # Save to history
-            conversation_manager.add_message(session_id, "user", message)
             conversation_manager.add_message(session_id, "assistant", result.content)
-            
+        else:
+            error_note = f"[分析失败] {result.error or '未知错误'}"
+            conversation_manager.add_message(session_id, "assistant", error_note)
+
         return result
 
     def _run_loop(self, messages: List[Dict[str, Any]], tool_decls: Dict[str, Any], start_time: float, tool_calls_log: List[Dict[str, Any]], total_tokens: int, parse_dashboard: bool, progress_callback: Optional[Callable] = None) -> AgentResult:
@@ -384,7 +404,13 @@ class AgentExecutor:
             logger.info(f"Agent step {step + 1}/{self.max_steps}")
 
             if progress_callback:
-                progress_callback({"type": "thinking", "step": step + 1, "message": f"第 {step + 1} 步：AI 正在思考..."})
+                if not tool_calls_log:
+                    thinking_msg = "正在制定分析路径..."
+                else:
+                    last_tool = tool_calls_log[-1].get("name", "")
+                    label = _THINKING_TOOL_LABELS.get(last_tool, last_tool)
+                    thinking_msg = f"「{label}」已完成，继续深入分析..."
+                progress_callback({"type": "thinking", "step": step + 1, "message": thinking_msg})
 
             response = self.llm_adapter.call_with_tools(messages, tool_decls)
             provider_used = response.provider

@@ -6,6 +6,7 @@ Agent API endpoints.
 import asyncio
 import json
 import logging
+import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -205,8 +206,8 @@ async def agent_chat_stream(request: ChatRequest):
     if not config.agent_mode:
         raise HTTPException(status_code=400, detail="Agent mode is not enabled")
 
-    session_id = request.session_id or "default_session"
-    loop = asyncio.get_event_loop()
+    session_id = request.session_id or str(uuid.uuid4())
+    loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
 
     def progress_callback(event: dict):

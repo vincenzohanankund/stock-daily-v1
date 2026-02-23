@@ -23,6 +23,22 @@ interface ProgressStep {
   success?: boolean;
   duration?: number;
   message?: string;
+  content?: string;
+}
+
+interface FollowUpContext {
+  stock_code: string;
+  stock_name: string | null;
+  previous_analysis_summary?: unknown;
+  previous_strategy?: unknown;
+  previous_price?: number;
+  previous_change_pct?: number;
+}
+
+interface ChatStreamPayload {
+  message: string;
+  skills?: string[];
+  context?: FollowUpContext;
 }
 
 // Quick question examples shown on empty state
@@ -76,7 +92,7 @@ const ChatPage: React.FC = () => {
       // Load previous report context for data reuse
       if (queryId) {
         historyApi.getDetail(queryId).then((report) => {
-          const ctx: Record<string, any> = { stock_code: stock, stock_name: name };
+          const ctx: FollowUpContext = { stock_code: stock, stock_name: name };
           if (report.summary) ctx.previous_analysis_summary = report.summary;
           if (report.strategy) ctx.previous_strategy = report.strategy;
           if (report.meta) {
@@ -91,7 +107,7 @@ const ChatPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  const followUpContextRef = useRef<Record<string, any> | null>(null);
+  const followUpContextRef = useRef<FollowUpContext | null>(null);
 
   const handleSend = async (overrideMessage?: string, overrideStrategy?: string) => {
     const msgText = overrideMessage || input.trim();
@@ -110,7 +126,7 @@ const ChatPage: React.FC = () => {
     setLoading(true);
     setProgressSteps([]);
 
-    const payload: Record<string, any> = {
+    const payload: ChatStreamPayload = {
       message: userMessage.content,
       skills: usedStrategy ? [usedStrategy] : undefined,
     };
@@ -129,7 +145,7 @@ const ChatPage: React.FC = () => {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        const detail = (errData as any).detail || `HTTP ${response.status}`;
+        const detail = (errData as { detail?: string }).detail || `HTTP ${response.status}`;
         if (response.status === 400 && String(detail).includes('not enabled')) {
           throw new Error('⚠️ Agent 模式未启用，请在 .env 中设置 AGENT_MODE=true 并重启服务。');
         }
@@ -152,17 +168,17 @@ const ChatPage: React.FC = () => {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const event = JSON.parse(line.slice(6)) as ProgressStep & { content?: string };
+            const event = JSON.parse(line.slice(6)) as ProgressStep;
             if (event.type === 'done') {
-              finalContent = (event as any).content ?? '';
+              finalContent = event.content ?? '';
             } else if (event.type === 'error') {
-              throw new Error(`❌ 分析出错: ${(event as any).message}`);
+              throw new Error(`❌ 分析出错: ${event.message}`);
             } else {
               currentProgressSteps.push(event);
               setProgressSteps((prev) => [...prev, event]);
             }
-          } catch (parseErr: any) {
-            if (parseErr.message?.startsWith('❌')) throw parseErr;
+          } catch (parseErr: unknown) {
+            if ((parseErr as Error).message?.startsWith('❌')) throw parseErr;
           }
         }
       }
@@ -178,11 +194,12 @@ const ChatPage: React.FC = () => {
           thinkingSteps: [...currentProgressSteps],
         },
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = (error as Error).message;
       const displayMsg =
-        error.message?.startsWith('⚠️') || error.message?.startsWith('❌')
-          ? error.message
-          : `抱歉，发生了错误: ${error.message || '未知错误'}`;
+        errMsg?.startsWith('⚠️') || errMsg?.startsWith('❌')
+          ? errMsg
+          : `抱歉，发生了错误: ${errMsg || '未知错误'}`;
       setMessages((prev) => [
         ...prev,
         { id: (Date.now() + 1).toString(), role: 'assistant', content: displayMsg },
@@ -222,7 +239,7 @@ const ChatPage: React.FC = () => {
   const getCurrentStage = (steps: ProgressStep[]): string => {
     if (steps.length === 0) return '正在连接...';
     const last = steps[steps.length - 1];
-    if (last.type === 'thinking') return last.message || `第 ${last.step} 步：AI 正在思考...`;
+    if (last.type === 'thinking') return last.message || 'AI 正在思考...';
     if (last.type === 'tool_start') return `${last.display_name || last.tool}...`;
     if (last.type === 'tool_done') return `${last.display_name || last.tool} 完成`;
     if (last.type === 'generating') return last.message || '正在生成最终分析...';

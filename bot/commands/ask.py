@@ -179,9 +179,9 @@ class AskCommand(BotCommand):
                 try:
                     sm2 = SkillManager()
                     sm2.load_builtin_strategies()
-                    for s in sm2.list_strategies():
-                        if s["id"] == strategy_id:
-                            strategy_name = s["name"]
+                    for s in sm2.list_skills():
+                        if s.name == strategy_id:
+                            strategy_name = s.display_name
                             break
                 except Exception:
                     pass
