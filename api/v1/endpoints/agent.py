@@ -141,9 +141,14 @@ async def agent_chat(request: ChatRequest):
             max_steps=config.agent_max_steps,
         )
         
-        # Run chat
-        result = executor.chat(message=request.message, session_id=session_id)
-        
+        # Run chat — offload the blocking call to a thread to avoid
+        # blocking the event loop (executor.chat is fully synchronous).
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: executor.chat(message=request.message, session_id=session_id),
+        )
+
         return ChatResponse(
             success=result.success,
             content=result.content,
@@ -234,6 +239,7 @@ async def agent_chat_stream(request: ChatRequest):
                     "content": result.content,
                     "error": result.error,
                     "total_steps": result.total_steps,
+                    "session_id": session_id,
                 }),
                 loop,
             )

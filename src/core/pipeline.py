@@ -535,7 +535,12 @@ class StockAnalysisPipeline:
             result.trend_prediction = dash.get("trend_prediction", "未知")
             result.operation_advice = dash.get("operation_advice", "观望")
             result.decision_type = dash.get("decision_type", "hold")
-            result.dashboard = dash
+            result.analysis_summary = dash.get("analysis_summary", "")
+            # The AI returns a top-level dict that contains a nested 'dashboard' sub-key
+            # with core_conclusion / battle_plan / intelligence.  AnalysisResult's helper
+            # methods (get_sniper_points, get_core_conclusion, etc.) expect that inner
+            # structure, so we unwrap it here.
+            result.dashboard = dash.get("dashboard") or dash
         else:
             result.sentiment_score = 50
             result.operation_advice = "观望"

@@ -10,6 +10,7 @@ Usage:
 
 import re
 import logging
+import uuid
 from typing import List, Optional
 
 from bot.commands.base import BotCommand
@@ -170,7 +171,10 @@ class AskCommand(BotCommand):
             if strategy_text:
                 user_msg = f"请分析股票 {code}，{strategy_text}"
 
-            session_id = f"{message.platform}_{message.user_id}_ask"
+            # Each /ask invocation is a self-contained single-shot analysis; isolate
+            # sessions per request so that different stocks or retry attempts never
+            # bleed context into each other.
+            session_id = f"ask_{code}_{uuid.uuid4()}"
             result = executor.chat(message=user_msg, session_id=session_id)
 
             if result.success:
