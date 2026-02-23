@@ -11,6 +11,14 @@
 - **Web 登录认证重构**：移除 `ADMIN_PASSWORD`、`ADMIN_PASSWORD_HASH`，改用 `ADMIN_AUTH_ENABLED` 开关 + 文件凭证。启用后首次访问在网页设置初始密码，支持「系统设置 > 修改密码」和 CLI `python -m src.auth reset_password` 重置。
 
 ### 修复
+- 🐛 **Agent 对话 Bug 修复**（#367 review follow-up）
+  - 修复 `bot/commands/ask.py` 中 `list_strategies()` 方法不存在导致策略名称回显失败，改为 `list_skills()` 正确属性访问
+  - 修复 `session_id` 缺省值为 `"default_session"` 导致多用户/多标签页会话串用，改为每次生成 UUID
+  - 修复 LLM 失败时对话消息不落库，下一轮上下文断层；现在成功/失败均写入历史
+  - `asyncio.get_event_loop()` 改为 Python 3.10+ 推荐的 `get_running_loop()`
+  - `storage.py` 中 `session.query()` 改为 SQLAlchemy 2.x 风格 `session.execute(select(...))`
+  - `ChatPage.tsx` 消除所有 `@typescript-eslint/no-explicit-any` 报错，引入 `FollowUpContext`、`ChatStreamPayload` 接口
+  - Agent 进度提示从「第 N 步：AI 正在思考...」改为具体动作描述（如「行情获取」已完成，继续深入分析...）
 - 🐛 **StockTrendAnalyzer 从未执行** (Issue #357)
   - 根因：`get_analysis_context` 仅返回 2 天数据且无 `raw_data`，pipeline 中 `raw_data in context` 始终为 False
   - 修复：Step 3 直接调用 `get_data_range` 获取 90 日历天（约 60 交易日）历史数据用于趋势分析
@@ -62,6 +70,15 @@
   - 新增 `AI_REVIEW_STRICT` 开关，可选将 AI 审查失败升级为阻断
 
 ### 新增
+- 🤖 **Agent 策略问股**（全链路）
+  - **API**：新增 `/api/v1/agent/strategies`（获取策略列表）与 `/api/v1/agent/chat/stream`（SSE 流式对话）
+  - **核心**：`src/agent/`（AgentExecutor ReAct 循环、LLMToolAdapter 多厂商适配、ConversationManager 会话持久化、ToolRegistry 工具注册）
+  - **内置策略**：11 种 YAML 策略（多头趋势、均线金叉、量价突破、缩量回踩、缠论、波浪理论、情绪周期、箱体震荡、龙头策略、一阳三阴、底部放量）
+  - **Web**：`/chat` 页面支持策略选择、流式进度反馈、多轮追问、从历史报告跳转追问
+  - **Bot**：`/ask <code> [strategy]` 命令触发策略分析，`/chat` 命令进入多轮对话
+  - **流水线接入**：`AGENT_MODE=true` + 技能配置时，pipeline 自动路由至 Agent 分析分支，向下兼容
+  - **配置项**：`AGENT_MODE`、`AGENT_MAX_STEPS`、`AGENT_STRATEGY_DIR`
+  - **兼容性**：`AGENT_MODE` 默认 false，不影响现有非 Agent 模式的分析流程；回滚只需将 `AGENT_MODE` 设为 false
 - **大盘复盘可选区域** (Issue #299)
   - 支持 `MARKET_REVIEW_REGION` 环境变量：cn（A股）、us（美股）、both（两者）
   - us 模式适合仅关注美股的用户，使用 SPX/纳斯达克/道指/VIX 等指数；both 模式可同时复盘 A 股与美股
