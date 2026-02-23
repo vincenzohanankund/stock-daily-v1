@@ -101,7 +101,7 @@ class AskCommand(BotCommand):
         try:
             sm = SkillManager()
             sm.load_builtin_strategies()
-            available_ids = [s["id"] for s in sm.list_strategies()]
+            available_ids = [s.name for s in sm.list_skills()]
             if strategy_text in available_ids:
                 return strategy_text
         except Exception:

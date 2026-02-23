@@ -513,6 +513,17 @@ class AgentExecutor:
                         error=None if dashboard else "Failed to parse dashboard JSON from agent response",
                     )
                 else:
+                    if response.provider == "error":
+                        return AgentResult(
+                            success=False,
+                            content="",
+                            dashboard=None,
+                            tool_calls_log=tool_calls_log,
+                            total_steps=step + 1,
+                            total_tokens=total_tokens,
+                            provider=provider_used,
+                            error=final_content,
+                        )
                     return AgentResult(
                         success=True,
                         content=final_content,

@@ -17,18 +17,19 @@ from src.config import get_config
 
 # Tool name -> Chinese display name mapping
 TOOL_DISPLAY_NAMES: Dict[str, str] = {
-    "get_realtime_quote": "获取实时行情",
-    "get_k_history": "获取历史K线",
-    "get_technical_analysis": "分析技术指标",
-    "get_chip_analysis": "分析筹码分布",
-    "search_news": "搜索新闻资讯",
-    "search_web": "搜索网络信息",
-    "get_market_overview": "获取市场概览",
-    "get_sector_analysis": "分析行业板块",
-    "get_financial_data": "获取财务数据",
-    "get_stock_info": "获取股票基本信息",
-    "analyze_pattern": "识别K线形态",
-    "get_volume_analysis": "分析量能变化",
+    "get_realtime_quote":         "获取实时行情",
+    "get_daily_history":          "获取历史K线",
+    "get_chip_distribution":      "分析筹码分布",
+    "get_analysis_context":       "获取分析上下文",
+    "get_stock_info":             "获取股票基本面",
+    "search_stock_news":          "搜索股票新闻",
+    "search_comprehensive_intel": "搜索综合情报",
+    "analyze_trend":              "分析技术趋势",
+    "calculate_ma":               "计算均线系统",
+    "get_volume_analysis":        "分析量能变化",
+    "analyze_pattern":            "识别K线形态",
+    "get_market_indices":         "获取市场指数",
+    "get_sector_rankings":        "分析行业板块",
 }
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ async def agent_chat(request: ChatRequest):
     if not config.agent_mode:
         raise HTTPException(status_code=400, detail="Agent mode is not enabled")
         
-    session_id = request.session_id or "default_session"
+    session_id = request.session_id or str(uuid.uuid4())
     
     try:
         # Import agent components

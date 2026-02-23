@@ -37,6 +37,7 @@ interface FollowUpContext {
 
 interface ChatStreamPayload {
   message: string;
+  session_id?: string;
   skills?: string[];
   context?: FollowUpContext;
 }
@@ -62,6 +63,8 @@ const ChatPage: React.FC = () => {
   const [showStrategyDesc, setShowStrategyDesc] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const initialFollowUpHandled = useRef(false);
+  // Stable session ID for multi-turn conversation - persists for the page lifetime
+  const sessionIdRef = useRef(crypto.randomUUID());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -128,6 +131,7 @@ const ChatPage: React.FC = () => {
 
     const payload: ChatStreamPayload = {
       message: userMessage.content,
+      session_id: sessionIdRef.current,
       skills: usedStrategy ? [usedStrategy] : undefined,
     };
     // Attach follow-up context if available (data reuse from report page)
@@ -170,7 +174,11 @@ const ChatPage: React.FC = () => {
           try {
             const event = JSON.parse(line.slice(6)) as ProgressStep;
             if (event.type === 'done') {
-              finalContent = event.content ?? '';
+              const doneEvent = event as unknown as { type: string; success: boolean; content?: string };
+              if (doneEvent.success === false) {
+                throw new Error(`❌ 分析失败: ${doneEvent.content || '大模型调用出错，请检查 API Key 配置'}`);
+              }
+              finalContent = doneEvent.content ?? '';
             } else if (event.type === 'error') {
               throw new Error(`❌ 分析出错: ${event.message}`);
             } else {
