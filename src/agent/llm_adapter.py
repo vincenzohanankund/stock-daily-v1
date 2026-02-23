@@ -81,7 +81,7 @@ class LLMToolAdapter:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=gemini_key)
-                model_name = config.gemini_model or "gemini-3-flash"
+                model_name = config.gemini_model or "gemini-2.5-flash"
                 self._gemini_model = genai.GenerativeModel(model_name=model_name)
                 self._gemini_available = True
                 logger.info(f"Agent LLM: Gemini initialized (model={model_name})")

@@ -432,47 +432,12 @@ class StockAnalysisPipeline:
         使用 Agent 模式分析单只股票。
         """
         try:
-            from src.agent.executor import AgentExecutor
-            from src.agent.llm_adapter import LLMToolAdapter
-            from src.agent.tools.registry import ToolRegistry
-            from src.agent.skills.base import SkillManager
-            from src.agent.tools.data_tools import ALL_DATA_TOOLS
-            from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
-            from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
-            from src.agent.tools.market_tools import ALL_MARKET_TOOLS
+            from src.agent.factory import build_agent_executor
 
-            # 构建工具注册表
-            registry = ToolRegistry()
-            for tool_fn in (ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS):
-                registry.register(tool_fn)
+            # Build executor from shared factory (ToolRegistry and SkillManager prototype are cached)
+            executor = build_agent_executor(self.config, self.config.agent_skills or None)
 
-            # 构建技能管理器
-            skill_manager = SkillManager()
-            skill_manager.load_builtin_strategies()
-            custom_dir = getattr(self.config, 'agent_strategy_dir', None)
-            if custom_dir:
-                skill_manager.load_custom_strategies(custom_dir)
-
-            skills_to_activate = getattr(self.config, 'agent_skills', [])
-            if skills_to_activate:
-                skill_manager.activate(skills_to_activate)
-            else:
-                skill_manager.activate(["all"])
-
-            skill_instructions = skill_manager.get_skill_instructions()
-
-            # 构建 LLM 适配器
-            llm_adapter = LLMToolAdapter(self.config)
-
-            # 构建执行器
-            executor = AgentExecutor(
-                tool_registry=registry,
-                llm_adapter=llm_adapter,
-                skill_instructions=skill_instructions,
-                max_steps=getattr(self.config, 'agent_max_steps', 10),
-            )
-
-            # 构建初始上下文，避免 Agent 重复调用工具
+            # Build initial context to avoid redundant tool calls
             initial_context = {
                 "stock_code": code,
                 "stock_name": stock_name,

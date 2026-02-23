@@ -54,45 +54,8 @@ class ChatCommand(BotCommand):
         session_id = f"{message.platform}_{message.user_id}"
         
         try:
-            # Import agent components
-            from src.agent.executor import AgentExecutor
-            from src.agent.llm_adapter import LLMToolAdapter
-            from src.agent.tools.registry import ToolRegistry
-            from src.agent.skills.base import SkillManager
-            from src.agent.tools.data_tools import ALL_DATA_TOOLS
-            from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
-            from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
-            from src.agent.tools.market_tools import ALL_MARKET_TOOLS
-            
-            # Build tool registry
-            registry = ToolRegistry()
-            for tool_fn in (ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS):
-                registry.register(tool_fn)
-                
-            # Build skill manager
-            skill_manager = SkillManager()
-            skill_manager.load_builtin_strategies()
-            custom_dir = getattr(config, 'agent_strategy_dir', None)
-            if custom_dir:
-                skill_manager.load_custom_strategies(custom_dir)
-            if config.agent_skills:
-                skill_manager.activate(config.agent_skills)
-            else:
-                skill_manager.activate(["all"])
-            skill_instructions = skill_manager.get_skill_instructions()
-            
-            # Build LLM adapter
-            llm_adapter = LLMToolAdapter(config)
-            
-            # Build executor
-            executor = AgentExecutor(
-                tool_registry=registry,
-                llm_adapter=llm_adapter,
-                skill_instructions=skill_instructions,
-                max_steps=config.agent_max_steps,
-            )
-            
-            # Run chat
+            from src.agent.factory import build_agent_executor
+            executor = build_agent_executor(config)
             result = executor.chat(message=user_message, session_id=session_id)
             
             if result.success:

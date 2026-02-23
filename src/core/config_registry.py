@@ -633,7 +633,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "",
+        "default_value": "bull_trend,ma_golden_cross,volume_breakout,shrink_pullback",
         "options": [],
         "validation": {},
         "display_order": 30,

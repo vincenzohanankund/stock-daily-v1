@@ -97,11 +97,9 @@ class AskCommand(BotCommand):
         strategy_text = " ".join(args[1:]).strip()
 
         # Try direct strategy id match first
-        from src.agent.skills.base import SkillManager
-
         try:
-            sm = SkillManager()
-            sm.load_builtin_strategies()
+            from src.agent.factory import get_skill_manager
+            sm = get_skill_manager()
             available_ids = [s.name for s in sm.list_skills()]
             if strategy_text in available_ids:
                 return strategy_text
@@ -132,39 +130,8 @@ class AskCommand(BotCommand):
         logger.info(f"[AskCommand] Stock: {code}, Strategy: {strategy_id}, Extra: {strategy_text}")
 
         try:
-            from src.agent.executor import AgentExecutor
-            from src.agent.llm_adapter import LLMToolAdapter
-            from src.agent.tools.registry import ToolRegistry
-            from src.agent.skills.base import SkillManager
-            from src.agent.tools.data_tools import ALL_DATA_TOOLS
-            from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
-            from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
-            from src.agent.tools.market_tools import ALL_MARKET_TOOLS
-
-            # Build tool registry
-            registry = ToolRegistry()
-            for tool_fn in ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS:
-                registry.register(tool_fn)
-
-            # Build skill manager - activate only the selected strategy
-            skill_manager = SkillManager()
-            skill_manager.load_builtin_strategies()
-            custom_dir = getattr(config, "agent_strategy_dir", None)
-            if custom_dir:
-                skill_manager.load_custom_strategies(custom_dir)
-            skill_manager.activate([strategy_id])
-            skill_instructions = skill_manager.get_skill_instructions()
-
-            # Build LLM adapter
-            llm_adapter = LLMToolAdapter(config)
-
-            # Build executor
-            executor = AgentExecutor(
-                tool_registry=registry,
-                llm_adapter=llm_adapter,
-                skill_instructions=skill_instructions,
-                max_steps=getattr(config, "agent_max_steps", 10),
-            )
+            from src.agent.factory import build_agent_executor
+            executor = build_agent_executor(config, skills=[strategy_id] if strategy_id else None)
 
             # Build message
             user_msg = f"请使用 {strategy_id} 策略分析股票 {code}"
@@ -181,8 +148,8 @@ class AskCommand(BotCommand):
                 # Prepend strategy tag
                 strategy_name = strategy_id
                 try:
-                    sm2 = SkillManager()
-                    sm2.load_builtin_strategies()
+                    from src.agent.factory import get_skill_manager
+                    sm2 = get_skill_manager()
                     for s in sm2.list_skills():
                         if s.name == strategy_id:
                             strategy_name = s.display_name

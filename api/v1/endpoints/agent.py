@@ -36,13 +36,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-DEFAULT_AGENT_SKILLS = [
-    "bull_trend",
-    "ma_golden_cross",
-    "volume_breakout",
-    "shrink_pullback",
-]
-
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
@@ -69,22 +62,13 @@ async def get_strategies():
     Get available agent strategies.
     """
     config = get_config()
-    from src.agent.skills.base import SkillManager
-    
-    skill_manager = SkillManager()
-    skill_manager.load_builtin_strategies()
-    custom_dir = getattr(config, 'agent_strategy_dir', None)
-    if custom_dir:
-        skill_manager.load_custom_strategies(custom_dir)
-        
-    strategies = []
-    for skill_id, skill in skill_manager._skills.items():
-        strategies.append(StrategyInfo(
-            id=skill_id,
-            name=skill.display_name,
-            description=skill.description
-        ))
-        
+    from src.agent.factory import get_skill_manager
+
+    skill_manager = get_skill_manager(config)
+    strategies = [
+        StrategyInfo(id=skill_id, name=skill.display_name, description=skill.description)
+        for skill_id, skill in skill_manager._skills.items()
+    ]
     return StrategiesResponse(strategies=strategies)
 
 @router.post("/chat", response_model=ChatResponse)
@@ -100,49 +84,9 @@ async def agent_chat(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     
     try:
-        # Import agent components
-        from src.agent.executor import AgentExecutor
-        from src.agent.llm_adapter import LLMToolAdapter
-        from src.agent.tools.registry import ToolRegistry
-        from src.agent.skills.base import SkillManager
-        from src.agent.tools.data_tools import ALL_DATA_TOOLS
-        from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
-        from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
-        from src.agent.tools.market_tools import ALL_MARKET_TOOLS
-        
-        # Build tool registry
-        registry = ToolRegistry()
-        for tool_fn in (ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS):
-            registry.register(tool_fn)
-            
-        # Build skill manager
-        skill_manager = SkillManager()
-        skill_manager.load_builtin_strategies()
-        custom_dir = getattr(config, 'agent_strategy_dir', None)
-        if custom_dir:
-            skill_manager.load_custom_strategies(custom_dir)
-            
-        skills_to_activate = request.skills if request.skills is not None else (config.agent_skills or DEFAULT_AGENT_SKILLS)
-        if skills_to_activate:
-            skill_manager.activate(skills_to_activate)
-        else:
-            skill_manager.activate(["all"])
-            
-        skill_instructions = skill_manager.get_skill_instructions()
-        
-        # Build LLM adapter
-        llm_adapter = LLMToolAdapter(config)
-        
-        # Build executor
-        executor = AgentExecutor(
-            tool_registry=registry,
-            llm_adapter=llm_adapter,
-            skill_instructions=skill_instructions,
-            max_steps=config.agent_max_steps,
-        )
-        
-        # Run chat — offload the blocking call to a thread to avoid
-        # blocking the event loop (executor.chat is fully synchronous).
+        executor = _build_executor(config, request.skills)
+
+        # Offload the blocking call to a thread to avoid blocking the event loop.
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
@@ -164,36 +108,8 @@ async def agent_chat(request: ChatRequest):
 
 def _build_executor(config, skills: Optional[List[str]] = None):
     """Build and return a configured AgentExecutor (sync helper)."""
-    from src.agent.executor import AgentExecutor
-    from src.agent.llm_adapter import LLMToolAdapter
-    from src.agent.tools.registry import ToolRegistry
-    from src.agent.skills.base import SkillManager
-    from src.agent.tools.data_tools import ALL_DATA_TOOLS
-    from src.agent.tools.analysis_tools import ALL_ANALYSIS_TOOLS
-    from src.agent.tools.search_tools import ALL_SEARCH_TOOLS
-    from src.agent.tools.market_tools import ALL_MARKET_TOOLS
-
-    registry = ToolRegistry()
-    for tool_fn in (ALL_DATA_TOOLS + ALL_ANALYSIS_TOOLS + ALL_SEARCH_TOOLS + ALL_MARKET_TOOLS):
-        registry.register(tool_fn)
-
-    skill_manager = SkillManager()
-    skill_manager.load_builtin_strategies()
-    custom_dir = getattr(config, "agent_strategy_dir", None)
-    if custom_dir:
-        skill_manager.load_custom_strategies(custom_dir)
-
-    skills_to_activate = skills if skills is not None else (config.agent_skills or DEFAULT_AGENT_SKILLS)
-    skill_manager.activate(skills_to_activate if skills_to_activate else ["all"])
-    logger.info(f"Activated strategies: {skills_to_activate}")
-
-    llm_adapter = LLMToolAdapter(config)
-    return AgentExecutor(
-        tool_registry=registry,
-        llm_adapter=llm_adapter,
-        skill_instructions=skill_manager.get_skill_instructions(),
-        max_steps=config.agent_max_steps,
-    )
+    from src.agent.factory import build_agent_executor
+    return build_agent_executor(config, skills=skills)
 
 
 @router.post("/chat/stream")
