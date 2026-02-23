@@ -204,20 +204,22 @@ class TestPipelineSkillRegistration(unittest.TestCase):
     """Test built-in strategies load from YAML via SkillManager."""
 
     def test_load_builtin_strategies(self):
-        """SkillManager.load_builtin_strategies() should load all 6 YAML strategies."""
+        """SkillManager.load_builtin_strategies() should load all 11 YAML strategies."""
         from src.agent.skills.base import SkillManager
 
         skill_manager = SkillManager()
         count = skill_manager.load_builtin_strategies()
-        self.assertEqual(count, 6)
+        self.assertEqual(count, 11)
 
         skills = skill_manager.list_skills()
-        self.assertEqual(len(skills), 6)
+        self.assertEqual(len(skills), 11)
 
         names = {s.name for s in skills}
         expected = {
             "dragon_head", "one_yang_three_yin", "shrink_pullback",
             "volume_breakout", "bottom_volume", "ma_golden_cross",
+            "bull_trend", "box_oscillation", "chan_theory",
+            "emotion_cycle", "wave_theory",
         }
         self.assertEqual(names, expected)
 
@@ -555,13 +557,13 @@ class TestSkillActivation(unittest.TestCase):
 
         skill_manager = SkillManager()
         count = skill_manager.load_builtin_strategies()
-        self.assertEqual(count, 6, "Should load 6 built-in strategies from YAML")
+        self.assertEqual(count, 11, "Should load 11 built-in strategies from YAML")
 
         # Simulate pipeline logic: empty config -> activate all
         skill_manager.activate(["all"])
 
         active = skill_manager.list_active_skills()
-        self.assertEqual(len(active), 6)
+        self.assertEqual(len(active), 11)
 
     def test_sentiment_score_parsed_from_dashboard(self):
         """Verify _agent_result_to_analysis_result handles non-numeric sentiment_score."""

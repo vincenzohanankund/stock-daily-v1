@@ -365,7 +365,7 @@ class TestBuiltinSkills(unittest.TestCase):
 
         manager = SkillManager()
         count = manager.load_builtin_strategies()
-        self.assertEqual(count, 6, "Should load 6 built-in strategies from YAML")
+        self.assertEqual(count, 11, "Should load 11 built-in strategies from YAML")
 
         skills = manager.list_skills()
         names = set()
