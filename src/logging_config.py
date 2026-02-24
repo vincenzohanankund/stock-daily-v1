@@ -21,15 +21,15 @@ from typing import List, Optional
 # 日志格式常量
 # ============================================================
 
-LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s'
-LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)-12s | %(filename)s:%(lineno)d | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # 默认需要降低日志级别的第三方库
 DEFAULT_QUIET_LOGGERS = [
-    'urllib3',
-    'sqlalchemy',
-    'google',
-    'httpx',
+    "urllib3",
+    "sqlalchemy",
+    "google",
+    "httpx",
 ]
 
 
@@ -66,7 +66,7 @@ def setup_logging(
     log_path.mkdir(parents=True, exist_ok=True)
 
     # 日志文件路径（按日期分文件）
-    today_str = datetime.now().strftime('%Y%m%d')
+    today_str = datetime.now().strftime("%Y%m%d")
     log_file = log_path / f"{log_prefix}_{today_str}.log"
     debug_log_file = log_path / f"{log_prefix}_debug_{today_str}.log"
 
@@ -89,7 +89,7 @@ def setup_logging(
         log_file,
         maxBytes=10 * 1024 * 1024,  # 10MB
         backupCount=5,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
@@ -100,7 +100,7 @@ def setup_logging(
         debug_log_file,
         maxBytes=50 * 1024 * 1024,  # 50MB
         backupCount=3,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     debug_handler.setLevel(logging.DEBUG)
     debug_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
