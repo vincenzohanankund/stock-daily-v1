@@ -21,6 +21,10 @@
   - 扩展 `analysis_tools` 与 `data_tools`，优化策略问股的工具调用链路与分析覆盖
 
 ### 修复（#patch）
+- 🐛 **修复 HTTP 非安全上下文下 /chat 页面黑屏**（Issue #377）
+  - `crypto.randomUUID()` 仅在 HTTPS/localhost 安全上下文中可用，通过 `http://IP:port` 访问时页面崩溃黑屏
+  - 新增 `apps/dsa-web/src/utils/uuid.ts`，提供带 fallback 的 `generateUUID()` 工具函数
+  - `ChatPage.tsx` 中的 session ID 生成改为调用 `generateUUID()`，兼容 HTTP 访问场景
 - 🐛 **Agent 对话 Bug 修复**（#367 review follow-up）
   - 修复 `bot/commands/ask.py` 中 `list_strategies()` 方法不存在导致策略名称回显失败，改为 `list_skills()` 正确属性访问
   - 修复 `session_id` 缺省值为 `"default_session"` 导致多用户/多标签页会话串用，改为每次生成 UUID
