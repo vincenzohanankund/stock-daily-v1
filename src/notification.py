@@ -1592,25 +1592,62 @@ class NotificationService:
     def _send_wechat_message(self, content: str) -> bool:
         """发送企业微信消息"""
         payload = self._gen_wechat_payload(content)
-        
-        response = requests.post(
-            self._wechat_url,
-            json=payload,
-            timeout=10,
-            verify=self._webhook_verify_ssl
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('errcode') == 0:
-                logger.info("企业微信消息发送成功")
-                return True
-            else:
-                logger.error(f"企业微信返回错误: {result}")
+
+        max_attempts = 3
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    self._wechat_url,
+                    json=payload,
+                    timeout=(10, 30),
+                    verify=self._webhook_verify_ssl,
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('errcode') == 0:
+                        logger.info("企业微信消息发送成功")
+                        return True
+
+                    logger.error(f"企业微信返回错误: {result}")
+                    return False
+
+                retryable_status = response.status_code in (408, 429, 500, 502, 503, 504)
+                if retryable_status and attempt < max_attempts:
+                    backoff_s = min(8.0, 2.0 * (2 ** (attempt - 1)))
+                    logger.warning(
+                        "企业微信请求失败: HTTP %s，准备重试 (%d/%d)，等待 %.1fs",
+                        response.status_code,
+                        attempt,
+                        max_attempts,
+                        backoff_s,
+                    )
+                    time.sleep(backoff_s)
+                    continue
+
+                logger.error(f"企业微信请求失败: {response.status_code}")
                 return False
-        else:
-            logger.error(f"企业微信请求失败: {response.status_code}")
-            return False
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                last_exc = e
+                if attempt < max_attempts:
+                    backoff_s = min(8.0, 2.0 * (2 ** (attempt - 1)))
+                    logger.warning(
+                        "企业微信请求异常: %s，准备重试 (%d/%d)，等待 %.1fs",
+                        type(e).__name__,
+                        attempt,
+                        max_attempts,
+                        backoff_s,
+                    )
+                    time.sleep(backoff_s)
+                    continue
+                raise
+
+        if last_exc is not None:
+            raise last_exc
+        return False
     
     def send_to_feishu(self, content: str) -> bool:
         """
