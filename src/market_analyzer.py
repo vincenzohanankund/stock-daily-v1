@@ -608,7 +608,7 @@ Output the report content directly, no extra commentary.
 （需要关注的风险点）
 
 ### 七、策略计划
-（给出进攻/均衡/防守结论，对应仓位建议，并给出一个触发失效条件）
+（给出进攻/均衡/防守结论，对应仓位建议，并给出一个触发失效条件；最后补充“建议仅供参考，不构成投资建议”。）
 
 ---
 
@@ -672,12 +672,7 @@ Output the report content directly, no extra commentary.
 - **领跌**: {bottom_text}
 """
         market_label = "A股" if self.region == "cn" else "美股"
-        strategy_summary = self.strategy.to_markdown_block() if self.region == "cn" else """
-### 六、Strategy Framework
-- **Trend Regime**: Confirm index alignment and breakout/failed-breakout context.
-- **Macro & Flows**: Link rates/flow narrative to equity risk appetite.
-- **Sector Themes**: Focus on persistent leaders and avoid weak laggards.
-"""
+        strategy_summary = self.strategy.to_markdown_block()
         report = f"""## {overview.date} 大盘复盘
 
 ### 一、市场总结

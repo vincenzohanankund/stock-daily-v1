@@ -47,7 +47,8 @@ class MarketStrategyBlueprint:
     def to_markdown_block(self) -> str:
         """Render blueprint as markdown section for template fallback report."""
         dims = "\n".join([f"- **{dim.name}**: {dim.objective}" for dim in self.dimensions])
-        return f"### 六、策略框架\n{dims}\n"
+        section_title = "### 六、策略框架" if self.region == "cn" else "### VI. Strategy Framework"
+        return f"{section_title}\n{dims}\n"
 
 
 CN_BLUEPRINT = MarketStrategyBlueprint(
@@ -132,4 +133,3 @@ US_BLUEPRINT = MarketStrategyBlueprint(
 def get_market_strategy_blueprint(region: str) -> MarketStrategyBlueprint:
     """Return strategy blueprint by market region."""
     return US_BLUEPRINT if region == "us" else CN_BLUEPRINT
-
