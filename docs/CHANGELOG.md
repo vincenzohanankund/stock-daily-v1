@@ -6,6 +6,7 @@
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+- 🧠 新增 A股/美股大盘分析策略系统：复盘 Prompt 注入区域化策略蓝图，并在输出中增加“策略计划”章节，统一给出仓位与风险触发条件建议。
 
 ### 新增（#minor）
 - 📅 **交易日判断**（Issue #373）
