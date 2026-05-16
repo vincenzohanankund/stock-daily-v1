@@ -1,0 +1,26 @@
+name: 周五晚间股票分析触发器
+
+on:
+  # 北京时间周五 22:00 = UTC 周五 14:00
+  schedule:
+    - cron: '0 14 * * 5'
+
+  # 允许手动测试这个触发器
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  trigger-daily-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily_analysis.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run daily_analysis.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f mode=full
