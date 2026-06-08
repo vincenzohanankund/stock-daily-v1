@@ -1,0 +1,57 @@
+name: Apply requested changes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply_requested_changes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch workflow files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('.github/workflows/daily_analysis.yml')
+          text = target.read_text(encoding='utf-8')
+          out = []
+          for line in text.splitlines():
+              stripped = line.strip()
+              if stripped.startswith('# 定时触发'):
+                  out.append(' # 定时触发 - 每个 A 股交易日北京时间 16:27 (UTC 08:27) 跑当天复盘')
+              elif "cron: '0 18 * * 1-5'" in line:
+                  out.append("    - cron: '27 8 * * 1-5'")
+              elif stripped.startswith('STOCK_LIST:'):
+                  out.append("          STOCK_LIST: '000733,002074,600667,002418,600268,300465,002085,600363,601555,601696'")
+              else:
+                  out.append(line)
+          target.write_text('\n'.join(out) + '\n', encoding='utf-8')
+
+          for p in [
+              '.github/workflows/friday_daily_analysis_trigger.yml',
+              '.github/workflows/manual_force_daily_analysis.yml',
+              '.github/workflows/apply_requested_changes.yml',
+          ]:
+              f = Path(p)
+              if f.exists():
+                  f.unlink()
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows
+          git commit -m "调整每日股票分析时间和自选股" || exit 0
+          git push
